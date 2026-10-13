@@ -1,0 +1,18 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+data/
+docker/volumes/
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# File lock sementara MS Word (muncul saat dokumen .docx sedang dibuka)
+~$*

@@ -1,0 +1,257 @@
+networks:
+  iiot-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  clickhouse-data:
+  emqx1-data:
+  emqx2-data:
+  emqx3-data:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: iiot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    container_name: iiot-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT}:8123"
+      - "${CLICKHOUSE_NATIVE_PORT}:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./services/clickhouse/init:/docker-entrypoint-initdb.d
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  emqx1:
+    image: emqx/emqx:5.6.1
+    container_name: iiot-emqx1
+    hostname: emqx1.local
+    restart: unless-stopped
+    environment: &emqx-env
+      EMQX_NODE_NAME: emqx@emqx1.local
+      EMQX_NODE__COOKIE: ${EMQX_CLUSTER_COOKIE}
+      EMQX_CLUSTER__DISCOVERY_STRATEGY: static
+      EMQX_CLUSTER__STATIC__SEEDS: "[emqx@emqx1.local,emqx@emqx2.local,emqx@emqx3.local]"
+      EMQX_DASHBOARD__DEFAULT_USERNAME: ${EMQX_DASHBOARD_USER}
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD}
+    volumes:
+      - emqx1-data:/opt/emqx/data
+    networks:
+      iiot-net:
+        aliases:
+          - emqx1.local
+    healthcheck: &emqx-healthcheck
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/18083;
+          printf 'GET /api/v5/status HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3;
+          cat <&3 | grep -q 'emqx is running'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  emqx2:
+    image: emqx/emqx:5.6.1
+    container_name: iiot-emqx2
+    hostname: emqx2.local
+    restart: unless-stopped
+    environment:
+      <<: *emqx-env
+      EMQX_NODE_NAME: emqx@emqx2.local
+    volumes:
+      - emqx2-data:/opt/emqx/data
+    networks:
+      iiot-net:
+        aliases:
+          - emqx2.local
+    healthcheck: *emqx-healthcheck
+
+  emqx3:
+    image: emqx/emqx:5.6.1
+    container_name: iiot-emqx3
+    hostname: emqx3.local
+    restart: unless-stopped
+    environment:
+      <<: *emqx-env
+      EMQX_NODE_NAME: emqx@emqx3.local
+    volumes:
+      - emqx3-data:/opt/emqx/data
+    networks:
+      iiot-net:
+        aliases:
+          - emqx3.local
+    healthcheck: *emqx-healthcheck
+
+  haproxy:
+    image: haproxy:2.9-alpine
+    container_name: iiot-haproxy
+    restart: unless-stopped
+    depends_on:
+      emqx1:
+        condition: service_healthy
+      emqx2:
+        condition: service_healthy
+      emqx3:
+        condition: service_healthy
+    volumes:
+      - ./services/emqx/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "${EMQX_MQTT_PORT}:1883"
+      - "${EMQX_MQTTS_PORT}:8883"
+      - "${EMQX_WS_PORT}:8083"
+      - "${EMQX_DASHBOARD_PORT}:18083"
+      - "${HAPROXY_STATS_PORT}:9000"
+    networks:
+      - iiot-net
+
+  analytics-api:
+    build:
+      context: ./services/analytics-api
+    container_name: iiot-analytics-api
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+    ports:
+      - "${ANALYTICS_API_PORT}:8000"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      device-mgmt:
+        condition: service_healthy
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  emqx-bootstrap:
+    image: curlimages/curl:8.11.1
+    container_name: iiot-emqx-bootstrap
+    restart: "no"
+    depends_on:
+      - haproxy
+      - analytics-api
+    environment:
+      EMQX_DASHBOARD_USER: ${EMQX_DASHBOARD_USER}
+      EMQX_DASHBOARD_PASSWORD: ${EMQX_DASHBOARD_PASSWORD}
+    entrypoint: ["sh", "/bootstrap.sh"]
+    volumes:
+      - ./services/emqx/bootstrap.sh:/bootstrap.sh:ro
+    networks:
+      - iiot-net
+
+  device-mgmt:
+    build:
+      context: ./services/device-mgmt
+    container_name: iiot-device-mgmt
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      JWT_ACCESS_EXPIRE_MINUTES: ${JWT_ACCESS_EXPIRE_MINUTES}
+      JWT_REFRESH_EXPIRE_MINUTES: ${JWT_REFRESH_EXPIRE_MINUTES}
+    ports:
+      - "${DEVICE_MGMT_PORT}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  auth-webhook:
+    build:
+      context: ./services/auth-webhook
+    container_name: iiot-auth-webhook
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      CACHE_TTL_SECONDS: ${AUTH_WEBHOOK_CACHE_TTL_SECONDS}
+      INTERNAL_SERVICE_USERNAME: ${INTERNAL_SERVICE_USERNAME}
+      INTERNAL_SERVICE_PASSWORD: ${INTERNAL_SERVICE_PASSWORD}
+    ports:
+      - "${AUTH_WEBHOOK_PORT}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      device-mgmt:
+        condition: service_healthy
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
