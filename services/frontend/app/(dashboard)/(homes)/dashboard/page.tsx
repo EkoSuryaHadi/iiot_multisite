@@ -5,15 +5,20 @@ import MetricsSummaryCard from "@/app/(dashboard)/(homes)/dashboard/components/m
 import StatCard from "@/app/(dashboard)/(homes)/dashboard/components/stat-card";
 import DashboardBreadcrumb from "@/components/layout/dashboard-breadcrumb";
 import TenantSelector from "@/components/shared/tenant-selector";
+import AutoRefreshSelector from "@/components/shared/auto-refresh-selector";
 import LoadingSkeleton from "@/components/loading-skeleton";
+import { AutoRefreshProvider } from "@/contexts/AutoRefreshContext";
 import { Suspense } from "react";
 
 export default function DashboardPage() {
   return (
-    <>
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+    <AutoRefreshProvider defaultInterval={30000}>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <DashboardBreadcrumb title="HIGHLIGHT INFORMATION" text="Highlight Information" />
-        <TenantSelector />
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <AutoRefreshSelector />
+          <TenantSelector />
+        </div>
       </div>
 
       <Suspense fallback={<LoadingSkeleton />}>
@@ -30,6 +35,6 @@ export default function DashboardPage() {
           <MetricsSummaryCard />
         </Suspense>
       </div>
-    </>
+    </AutoRefreshProvider>
   );
 }

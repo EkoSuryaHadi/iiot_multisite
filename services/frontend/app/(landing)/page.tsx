@@ -1,14 +1,13 @@
 import LandingHero from "@/components/landing/landing-hero";
 import LandingFeatures from "@/components/landing/landing-features";
-//import LandingPricing from "@/components/landing/landing-pricing";
-import LandingTestimonials from "@/components/landing/landing-testimonials";
+import LandingArchitecture from "@/components/landing/landing-architecture";
 
 export default function Home() {
   return (
-    <>
+    <div className="w-full flex flex-col min-h-screen">
       <LandingHero />
       <LandingFeatures />
-      <LandingTestimonials />
-    </>
+      <LandingArchitecture />
+    </div>
   );
 }

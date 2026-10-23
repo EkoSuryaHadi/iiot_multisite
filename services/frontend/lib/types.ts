@@ -101,3 +101,17 @@ export interface SiteSummary extends TenantSummary {
 export interface ApiError {
   detail: string | { msg: string }[]
 }
+
+export type AlarmSeverity = "critical" | "warning" | "info"
+
+export interface AlarmItem {
+  id: string
+  title: string
+  message: string
+  severity: AlarmSeverity
+  source: string
+  metric_name?: string
+  value?: number
+  threshold?: number
+  timestamp: string
+}

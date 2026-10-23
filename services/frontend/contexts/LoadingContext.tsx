@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, ReactNode, useContext, useState } from "react";
-import { EmailSidebarProvider } from "./email-sidebar-context";
 
 interface LoadingContextType {
   loading: boolean;
@@ -15,9 +14,7 @@ export const LoadingProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <LoadingContext.Provider value={{ loading, setLoading }}>
-      <EmailSidebarProvider>
-        {children}
-      </EmailSidebarProvider>
+      {children}
     </LoadingContext.Provider>
   );
 };

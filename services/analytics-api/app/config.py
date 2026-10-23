@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     # Buffering ingest: flush saat salah satu kondisi tercapai (batch penuh / interval lewat).
     ingest_batch_size: int = 500
     ingest_flush_interval_seconds: float = 2.0
+    ingest_secret: str = "change_me_ingest_secret"
+    ingest_max_buffered_rows: int = 100_000
 
     # Postgres (read-only) - dipakai untuk resolusi tenant_id (JWT) -> tenant_slug (ClickHouse).
     postgres_host: str = "postgres"

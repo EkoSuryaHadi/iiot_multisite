@@ -1,0 +1,272 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+networks:
+  iiot-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  clickhouse-data:
+  emqx1-data:
+  caddy-data:
+  caddy-config:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: iiot-postgres
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8-alpine
+    container_name: iiot-clickhouse
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 2g
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./services/clickhouse/init:/docker-entrypoint-initdb.d
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  emqx1:
+    image: emqx/emqx:5.6.1
+    container_name: iiot-emqx1
+    hostname: emqx1.local
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 1g
+    environment:
+      EMQX_NODE_NAME: emqx@emqx1.local
+      EMQX_NODE__COOKIE: ${EMQX_CLUSTER_COOKIE}
+      EMQX_CLUSTER__DISCOVERY_STRATEGY: manual
+      EMQX_DASHBOARD__DEFAULT_USERNAME: ${EMQX_DASHBOARD_USER}
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD}
+    ports:
+      - "${EMQX_MQTT_PORT:-1883}:1883"
+      - "${EMQX_MQTTS_PORT:-8883}:8883"
+      - "127.0.0.1:${EMQX_DASHBOARD_PORT:-18083}:18083"
+    volumes:
+      - emqx1-data:/opt/emqx/data
+    networks:
+      iiot-net:
+        aliases:
+          - emqx1.local
+    healthcheck:
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/18083;
+          printf 'GET /api/v5/status HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3;
+          cat <&3 | grep -q 'emqx is running'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  device-mgmt:
+    build:
+      context: ./services/device-mgmt
+    container_name: iiot-device-mgmt
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 256m
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      JWT_ACCESS_EXPIRE_MINUTES: ${JWT_ACCESS_EXPIRE_MINUTES}
+      JWT_REFRESH_EXPIRE_MINUTES: ${JWT_REFRESH_EXPIRE_MINUTES}
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-itdev@gaungnusa.com}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  auth-webhook:
+    build:
+      context: ./services/auth-webhook
+    container_name: iiot-auth-webhook
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 256m
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      CACHE_TTL_SECONDS: ${AUTH_WEBHOOK_CACHE_TTL_SECONDS}
+      INTERNAL_SERVICE_USERNAME: ${INTERNAL_SERVICE_USERNAME}
+      INTERNAL_SERVICE_PASSWORD: ${INTERNAL_SERVICE_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      device-mgmt:
+        condition: service_healthy
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  analytics-api:
+    build:
+      context: ./services/analytics-api
+    container_name: iiot-analytics-api
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      INGEST_SECRET: ${INGEST_SECRET}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      device-mgmt:
+        condition: service_healthy
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  emqx-bootstrap:
+    image: curlimages/curl:8.11.1
+    container_name: iiot-emqx-bootstrap
+    restart: "no"
+    logging: *default-logging
+    depends_on:
+      emqx1:
+        condition: service_healthy
+      analytics-api:
+        condition: service_healthy
+      auth-webhook:
+        condition: service_healthy
+    environment:
+      EMQX_DASHBOARD_URL: "http://emqx1:18083"
+      EMQX_DASHBOARD_USER: ${EMQX_DASHBOARD_USER}
+      EMQX_DASHBOARD_PASSWORD: ${EMQX_DASHBOARD_PASSWORD}
+      INGEST_SECRET: ${INGEST_SECRET}
+    entrypoint: ["sh", "/bootstrap.sh"]
+    volumes:
+      - ./services/emqx/bootstrap.sh:/bootstrap.sh:ro
+    networks:
+      - iiot-net
+
+  frontend:
+    build:
+      context: ./services/frontend
+    container_name: iiot-frontend
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    environment:
+      NODE_ENV: production
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      DEVICE_MGMT_API_URL: "http://device-mgmt:8000"
+      ANALYTICS_API_URL: "http://analytics-api:8000"
+    depends_on:
+      device-mgmt:
+        condition: service_healthy
+      analytics-api:
+        condition: service_healthy
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/auth/providers"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: iiot-caddy
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 128m
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./services/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    networks:
+      - iiot-net

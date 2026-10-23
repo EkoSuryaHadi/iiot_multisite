@@ -1,8 +1,10 @@
+import hmac
 import json
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, status
 
 from app.buffer import device_status_buffer, telemetry_buffer
+from app.config import settings
 from app.ingest_logic import coerce_payload_to_dict, extract_numeric_metrics, resolve_timestamp
 from app.schemas import IngestRequest, IngestResponse
 from app.topics import STATUS_SUFFIX, TELEMETRY_SUFFIX, parse_device_topic
@@ -11,7 +13,17 @@ router = APIRouter(tags=["ingest"])
 
 
 @router.post("/ingest", response_model=IngestResponse)
-async def ingest(payload: IngestRequest) -> IngestResponse:
+async def ingest(
+    payload: IngestRequest,
+    x_ingest_secret: str | None = Header(default=None, alias="X-Ingest-Secret"),
+) -> IngestResponse:
+    if settings.ingest_secret:
+        if not x_ingest_secret or not hmac.compare_digest(x_ingest_secret, settings.ingest_secret):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Header X-Ingest-Secret tidak valid atau tidak disertakan",
+            )
+
     parsed_topic = parse_device_topic(payload.topic)
     if parsed_topic is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Topik tidak valid: {payload.topic}")

@@ -35,3 +35,4 @@ class LockedTTLCache:
 
 authn_cache = LockedTTLCache(maxsize=settings.cache_max_size, ttl=settings.cache_ttl_seconds)
 authz_cache = LockedTTLCache(maxsize=settings.cache_max_size, ttl=settings.cache_ttl_seconds)
+verified_password_cache = LockedTTLCache(maxsize=settings.cache_max_size, ttl=settings.cache_ttl_seconds)

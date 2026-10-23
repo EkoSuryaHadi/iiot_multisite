@@ -11,19 +11,9 @@ router = APIRouter(tags=["devices"])
 DEFAULT_ONLINE_THRESHOLD_SECONDS = 300
 
 _DEVICES_STATUS_SQL = """
-    SELECT tenant_slug, site_slug, device_key, max(last_seen) AS last_seen
-    FROM (
-        SELECT tenant_slug, site_slug, device_key, max(ts) AS last_seen
-        FROM telemetry
-        WHERE tenant_slug = {tenant_slug:String} {site_filter}
-        GROUP BY tenant_slug, site_slug, device_key
-        UNION ALL
-        SELECT tenant_slug, site_slug, device_key, max(ts) AS last_seen
-        FROM device_status
-        WHERE tenant_slug = {tenant_slug:String} {site_filter}
-        GROUP BY tenant_slug, site_slug, device_key
-    )
-    GROUP BY tenant_slug, site_slug, device_key
+    SELECT tenant_slug, site_slug, device_key, status, last_seen
+    FROM device_last_seen FINAL
+    WHERE tenant_slug = {tenant_slug:String} {site_filter}
     ORDER BY tenant_slug, site_slug, device_key
     LIMIT {limit:UInt32} OFFSET {offset:UInt32}
 """
@@ -54,9 +44,9 @@ def list_device_status(
 
     now = client.query("SELECT now()").result_rows[0][0]
     devices = []
-    for tenant_slug_row, site_slug_row, device_key_row, last_seen in result.result_rows:
+    for tenant_slug_row, site_slug_row, device_key_row, status_row, last_seen in result.result_rows:
         age_seconds = (now - last_seen).total_seconds()
-        status_value = "online" if age_seconds <= online_threshold_seconds else "offline"
+        status_value = "online" if (age_seconds <= online_threshold_seconds and status_row != "offline") else "offline"
         devices.append(
             DeviceStatusOut(
                 tenant_slug=tenant_slug_row,

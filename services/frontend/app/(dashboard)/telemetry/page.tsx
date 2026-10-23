@@ -1,8 +1,10 @@
 "use client";
 
 import TelemetryChart from "@/app/(dashboard)/telemetry/components/telemetry-chart";
+import { RadialGauge } from "@/components/charts/radial-gauge";
 import DashboardBreadcrumb from "@/components/layout/dashboard-breadcrumb";
 import TenantSelector from "@/components/shared/tenant-selector";
+import { ExportTelemetryDialog } from "@/components/telemetry/export-telemetry-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -105,7 +107,19 @@ export default function TelemetryPage() {
     <>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
         <DashboardBreadcrumb title="TELEMETRY" text="Telemetry" />
-        <TenantSelector />
+        <div className="flex items-center gap-3">
+          <TenantSelector />
+          <ExportTelemetryDialog
+            devices={devices}
+            sites={sites}
+            initialDeviceId={deviceId}
+            initialMetric={metricName}
+            initialInterval={interval}
+            initialStart={start}
+            initialEnd={end}
+            currentPoints={result?.points}
+          />
+        </div>
       </div>
 
       <Card className="card mb-6">
@@ -165,15 +179,38 @@ export default function TelemetryPage() {
 
       {result && (
         <>
-          <Card className="card mb-6">
-            <CardContent>
-              {result.points.length === 0 ? (
+          {result.points.length === 0 ? (
+            <Card className="card mb-6">
+              <CardContent className="p-6">
                 <p className="text-sm text-neutral-500">Tidak ada data pada rentang waktu ini.</p>
-              ) : (
-                <TelemetryChart points={result.points} metricName={result.metric_name} />
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+              <div className="lg:col-span-1">
+                {(() => {
+                  const latestPoint = result.points[result.points.length - 1];
+                  const latestVal = latestPoint.value ?? latestPoint.avg ?? 0;
+                  const vals = result.points.map((p) => p.value ?? p.avg ?? 0);
+                  const minV = Math.floor(Math.min(...vals));
+                  const maxV = Math.ceil(Math.max(...vals));
+                  return (
+                    <RadialGauge
+                      title={`Nilai Terkini (${result.metric_name})`}
+                      value={latestVal}
+                      min={minV}
+                      max={maxV > minV ? maxV : minV + 100}
+                    />
+                  );
+                })()}
+              </div>
+              <Card className="card lg:col-span-2 border border-neutral-200 dark:border-slate-700 shadow-none">
+                <CardContent className="p-4">
+                  <TelemetryChart points={result.points} metricName={result.metric_name} />
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           <Card className="card">
             <CardContent className="px-0">

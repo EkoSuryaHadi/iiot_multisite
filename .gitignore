@@ -1,4 +1,6 @@
 .env
+.env.*
+.env*.local
 __pycache__/
 *.pyc
 .venv/
@@ -14,5 +16,12 @@ docker/volumes/
 .idea/
 .vscode/
 
-# File lock sementara MS Word (muncul saat dokumen .docx sedang dibuka)
+# File dokumen & kredensial sementara
+*.docx
+*.doc
+*.xlsx
+*.pdf
 ~$*
+*.tar.gz
+*.zip
+*.tar

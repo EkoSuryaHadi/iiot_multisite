@@ -4,19 +4,9 @@ router /devices/status dan /summary/*.
 from app.clickhouse_client import get_client
 
 _LAST_SEEN_SQL = """
-    SELECT device_key, max(last_seen) AS last_seen
-    FROM (
-        SELECT device_key, max(ts) AS last_seen
-        FROM telemetry
-        WHERE tenant_slug = {tenant_slug:String} {site_filter}
-        GROUP BY device_key
-        UNION ALL
-        SELECT device_key, max(ts) AS last_seen
-        FROM device_status
-        WHERE tenant_slug = {tenant_slug:String} {site_filter}
-        GROUP BY device_key
-    )
-    GROUP BY device_key
+    SELECT device_key, status, last_seen
+    FROM device_last_seen FINAL
+    WHERE tenant_slug = {tenant_slug:String} {site_filter}
 """
 
 
@@ -34,9 +24,9 @@ def count_online_offline(tenant_slug: str, site_slug: str | None, online_thresho
 
     online = 0
     offline = 0
-    for _device_key, last_seen in result.result_rows:
+    for _device_key, status, last_seen in result.result_rows:
         age_seconds = (now - last_seen).total_seconds()
-        if age_seconds <= online_threshold_seconds:
+        if age_seconds <= online_threshold_seconds and status != "offline":
             online += 1
         else:
             offline += 1

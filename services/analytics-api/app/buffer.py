@@ -1,7 +1,6 @@
 import asyncio
 import logging
 
-from app.clickhouse_client import get_client
 from app.config import settings
 
 logger = logging.getLogger("ingest-buffer")
@@ -14,13 +13,25 @@ class AsyncBatchBuffer:
     flush_interval_seconds lewat - mana dulu yang tercapai. Ini mengurangi jumlah
     INSERT statement ke ClickHouse dibanding insert 1 baris per request HTTP
     dari EMQX Rule Engine.
+
+    Jika insert gagal (misal ClickHouse timeout/down sesaat), data dikembalikan
+    ke antrean untuk dicoba ulang pada siklus berikutnya, dengan batas memori
+    maksimum (max_buffered_rows).
     """
 
-    def __init__(self, table: str, column_names: list[str], batch_size: int, flush_interval: float) -> None:
+    def __init__(
+        self,
+        table: str,
+        column_names: list[str],
+        batch_size: int,
+        flush_interval: float,
+        max_buffered_rows: int = 100_000,
+    ) -> None:
         self._table = table
         self._column_names = column_names
         self._batch_size = batch_size
         self._flush_interval = flush_interval
+        self._max_buffered_rows = max_buffered_rows
         self._rows: list[tuple] = []
         self._lock = asyncio.Lock()
         self._task: asyncio.Task | None = None
@@ -44,11 +55,29 @@ class AsyncBatchBuffer:
         try:
             await asyncio.to_thread(self._insert, rows_to_insert)
         except Exception:
-            logger.exception("Gagal insert batch ke tabel %s, %d baris dibuang", self._table, len(rows_to_insert))
+            logger.warning(
+                "Gagal insert batch ke tabel %s (%d baris). Mengembalikan data ke antrean untuk dicoba ulang.",
+                self._table,
+                len(rows_to_insert),
+            )
+            async with self._lock:
+                combined = rows_to_insert + self._rows
+                if len(combined) > self._max_buffered_rows:
+                    overflow = len(combined) - self._max_buffered_rows
+                    logger.error(
+                        "Buffer %s melampaui kapasitas maksimum %d baris. Membuang %d baris terlama.",
+                        self._table,
+                        self._max_buffered_rows,
+                        overflow,
+                    )
+                    combined = combined[overflow:]
+                self._rows = combined
             return 0
         return len(rows_to_insert)
 
     def _insert(self, rows: list[tuple]) -> None:
+        from app.clickhouse_client import get_client
+
         client = get_client()
         client.insert(self._table, rows, column_names=self._column_names)
 
@@ -78,6 +107,7 @@ telemetry_buffer = AsyncBatchBuffer(
     column_names=["tenant_slug", "site_slug", "device_key", "metric_name", "metric_value", "ts", "raw_payload"],
     batch_size=settings.ingest_batch_size,
     flush_interval=settings.ingest_flush_interval_seconds,
+    max_buffered_rows=settings.ingest_max_buffered_rows,
 )
 
 device_status_buffer = AsyncBatchBuffer(
@@ -85,4 +115,5 @@ device_status_buffer = AsyncBatchBuffer(
     column_names=["tenant_slug", "site_slug", "device_key", "status", "ts", "raw_payload"],
     batch_size=settings.ingest_batch_size,
     flush_interval=settings.ingest_flush_interval_seconds,
+    max_buffered_rows=settings.ingest_max_buffered_rows,
 )

@@ -1,4 +1,5 @@
 import secrets
+import string
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
@@ -20,8 +21,10 @@ def verify_secret(plain: str, hashed: str) -> bool:
         return False
 
 
-def generate_device_password(length: int = 32) -> str:
-    return secrets.token_urlsafe(length)
+def generate_device_password(length: int = 10) -> str:
+    alphabet = string.ascii_letters + string.digits
+    actual_length = min(length, 10)
+    return "".join(secrets.choice(alphabet) for _ in range(actual_length))
 
 
 def _create_token(

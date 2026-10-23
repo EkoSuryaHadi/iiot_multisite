@@ -1,5 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
+from starlette.requests import Request
+
+from app.rate_limit import get_rate_limit_key
 from tests.conftest import make_token
 
 
@@ -154,3 +157,35 @@ async def test_telemetry_aggregated_1m_interval(client, ch_client, tenant_a):
     assert point["count"] == 6
     assert point["min"] == 10.0
     assert point["max"] == 15.0
+
+
+def test_rate_limit_key_uses_jwt_sub_and_forwarded_for(tenant_a):
+    token1 = make_token(tenant_a.id, "viewer")
+    token2 = make_token(tenant_a.id, "viewer")
+
+    req1 = Request(
+        {
+            "type": "http",
+            "headers": [(b"authorization", f"Bearer {token1}".encode())],
+            "client": ("172.18.0.10", 50000),
+        }
+    )
+    req2 = Request(
+        {
+            "type": "http",
+            "headers": [(b"authorization", f"Bearer {token2}".encode())],
+            "client": ("172.18.0.10", 50000),
+        }
+    )
+    assert get_rate_limit_key(req1).startswith("user:")
+    assert get_rate_limit_key(req2).startswith("user:")
+    assert get_rate_limit_key(req1) != get_rate_limit_key(req2)
+
+    req_xff = Request(
+        {
+            "type": "http",
+            "headers": [(b"x-forwarded-for", b"203.0.113.5, 172.18.0.10")],
+            "client": ("172.18.0.10", 50000),
+        }
+    )
+    assert get_rate_limit_key(req_xff) == "ip:203.0.113.5"

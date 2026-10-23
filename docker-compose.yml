@@ -163,6 +163,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: ${JWT_ALGORITHM}
+      INGEST_SECRET: ${INGEST_SECRET}
     ports:
       - "${ANALYTICS_API_PORT}:8000"
     depends_on:
@@ -191,6 +192,7 @@ services:
     environment:
       EMQX_DASHBOARD_USER: ${EMQX_DASHBOARD_USER}
       EMQX_DASHBOARD_PASSWORD: ${EMQX_DASHBOARD_PASSWORD}
+      INGEST_SECRET: ${INGEST_SECRET}
     entrypoint: ["sh", "/bootstrap.sh"]
     volumes:
       - ./services/emqx/bootstrap.sh:/bootstrap.sh:ro

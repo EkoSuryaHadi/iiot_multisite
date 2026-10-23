@@ -25,9 +25,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SiteMapView } from "@/components/sites/site-map-view";
 import { useTenantContext } from "@/contexts/TenantContext";
-import { ApiRequestError, sitesApi } from "@/lib/api-client";
-import type { Site } from "@/lib/types";
+import { ApiRequestError, devicesApi, sitesApi } from "@/lib/api-client";
+import type { Device, Site } from "@/lib/types";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -102,14 +103,24 @@ function CreateSiteDialog({ tenantId, onCreated }: { tenantId?: string; onCreate
 function SitesPageContent() {
   const { isSuperadmin, selectedTenant } = useTenantContext();
   const [sites, setSites] = useState<Site[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (isSuperadmin && !selectedTenant) return;
+    if (isSuperadmin && !selectedTenant) {
+      setSites([]);
+      setDevices([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const all = await sitesApi.list();
-      setSites(isSuperadmin && selectedTenant ? all.filter((s) => s.tenant_id === selectedTenant.id) : all);
+      const [allSites, allDevices] = await Promise.all([
+        sitesApi.list(),
+        devicesApi.list().catch(() => [] as Device[]),
+      ]);
+      setSites(isSuperadmin && selectedTenant ? allSites.filter((s) => s.tenant_id === selectedTenant.id) : allSites);
+      setDevices(isSuperadmin && selectedTenant ? allDevices.filter((d) => d.tenant_id === selectedTenant.id) : allDevices);
     } catch (error) {
       toast.error(error instanceof ApiRequestError ? error.message : "Gagal memuat site");
     } finally {
@@ -154,10 +165,18 @@ function SitesPageContent() {
         </div>
       </div>
 
+      {!loading && sites.length > 0 && (
+        <div className="mb-6">
+          <SiteMapView sites={sites} devices={devices} />
+        </div>
+      )}
+
       <Card className="card">
         <CardContent className="px-0">
           {loading ? (
             <p className="text-sm text-neutral-500 px-6">Memuat...</p>
+          ) : isSuperadmin && !selectedTenant ? (
+            <p className="text-sm text-neutral-500 px-6">Pilih atau buat tenant terlebih dahulu untuk melihat daftar site.</p>
           ) : sites.length === 0 ? (
             <p className="text-sm text-neutral-500 px-6">Belum ada site.</p>
           ) : (

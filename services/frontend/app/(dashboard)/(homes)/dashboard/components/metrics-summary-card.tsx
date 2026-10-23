@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useAutoRefresh } from "@/contexts/AutoRefreshContext";
 import { useTenantContext } from "@/contexts/TenantContext";
 import { analyticsApi, ApiRequestError } from "@/lib/api-client";
 import type { MetricSummary } from "@/lib/types";
@@ -17,11 +18,15 @@ import toast from "react-hot-toast";
 
 const MetricsSummaryCard = () => {
   const { isSuperadmin, selectedTenantSlug } = useTenantContext();
+  const { refreshTrigger } = useAutoRefresh();
   const [metrics, setMetrics] = useState<MetricSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (isSuperadmin && !selectedTenantSlug) return;
+    if (isSuperadmin && !selectedTenantSlug) {
+      setLoading(false);
+      return;
+    }
     let active = true;
     setLoading(true);
 
@@ -36,7 +41,7 @@ const MetricsSummaryCard = () => {
     return () => {
       active = false;
     };
-  }, [isSuperadmin, selectedTenantSlug]);
+  }, [isSuperadmin, selectedTenantSlug, refreshTrigger]);
 
   return (
     <Card className="card">
@@ -46,6 +51,8 @@ const MetricsSummaryCard = () => {
       <CardContent className="px-0">
         {loading ? (
           <p className="text-sm text-neutral-500 px-6">Memuat...</p>
+        ) : isSuperadmin && !selectedTenantSlug ? (
+          <p className="text-sm text-neutral-500 px-6">Pilih tenant terlebih dahulu di pojok kanan atas.</p>
         ) : metrics.length === 0 ? (
           <p className="text-sm text-neutral-500 px-6">Belum ada telemetry pada jam terakhir.</p>
         ) : (

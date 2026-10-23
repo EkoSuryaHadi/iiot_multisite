@@ -3,11 +3,12 @@
 # Idempotent - aman dijalankan berulang (saat compose up ulang / restart).
 set -eu
 
-DASHBOARD_URL="http://haproxy:18083"
+DASHBOARD_URL="${EMQX_DASHBOARD_URL:-http://haproxy:18083}"
 USERNAME="${EMQX_DASHBOARD_USER}"
 PASSWORD="${EMQX_DASHBOARD_PASSWORD}"
+INGEST_SECRET="${INGEST_SECRET:-change_me_ingest_secret}"
 
-echo "[bootstrap] menunggu EMQX dashboard (via LB) siap..."
+echo "[bootstrap] menunggu EMQX dashboard ($DASHBOARD_URL) siap..."
 until curl -sf "$DASHBOARD_URL/api/v5/status" >/dev/null 2>&1; do
   sleep 2
 done
@@ -139,7 +140,7 @@ ACTION_BODY='{
   "parameters": {
     "path": "/ingest",
     "method": "post",
-    "headers": {"content-type": "application/json"},
+    "headers": {"content-type": "application/json", "x-ingest-secret": "'"$INGEST_SECRET"'"},
     "body": "{\"topic\": \"${topic}\", \"payload\": ${payload}, \"clientid\": \"${clientid}\", \"publish_received_at\": ${timestamp}}"
   }
 }'
@@ -155,7 +156,7 @@ if [ $ACTION_RC -ne 0 ]; then
       "parameters": {
         "path": "/ingest",
         "method": "post",
-        "headers": {"content-type": "application/json"},
+        "headers": {"content-type": "application/json", "x-ingest-secret": "'"$INGEST_SECRET"'"},
         "body": "{\"topic\": \"${topic}\", \"payload\": ${payload}, \"clientid\": \"${clientid}\", \"publish_received_at\": ${timestamp}}"
       }
     }' >/dev/null
