@@ -29,7 +29,8 @@ def create_site(
     if exists:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Slug site sudah dipakai di tenant ini")
 
-    site = Site(tenant_id=tenant_id, slug=payload.slug, name=payload.name)
+    site_data = payload.model_dump(exclude={"tenant_id"})
+    site = Site(tenant_id=tenant_id, **site_data)
     db.add(site)
     db.commit()
     db.refresh(site)

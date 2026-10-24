@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +22,13 @@ class Role(str, enum.Enum):
     TENANT_ADMIN = "tenant_admin"
     OPERATOR = "operator"
     VIEWER = "viewer"
+
+
+class SiteConfigurationType(str, enum.Enum):
+    TYPE_A = "TYPE_A"  # 3.0 kW / 5.85 kWp / 80 A
+    TYPE_B = "TYPE_B"  # 4.5 kW / 8.2 kWp / 100 A
+    TYPE_C = "TYPE_C"  # 6.0 kW / 11.7 kWp / 2x80 A
+    TYPE_D = "TYPE_D"  # 7.5 kW / 14.0 kWp / 2x100 A
 
 
 class Tenant(Base):
@@ -48,6 +55,18 @@ class Site(Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
+
+    # SPS On-Grid Specifications (Nullable for 100% backward compatibility)
+    site_type: Mapped[SiteConfigurationType | None] = mapped_column(
+        Enum(SiteConfigurationType, name="site_configuration_type"), nullable=True
+    )
+    pv_capacity_kwp: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mppt_capacity_a: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rectifier_float_voltage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    baseline_kwh_daily: Mapped[float | None] = mapped_column(Float, nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tower_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     tenant: Mapped["Tenant"] = relationship(back_populates="sites")
     devices: Mapped[list["Device"]] = relationship(back_populates="site", cascade="all, delete-orphan")
@@ -86,6 +105,9 @@ class Device(Base):
     credential: Mapped["DeviceCredential | None"] = relationship(
         back_populates="device", cascade="all, delete-orphan", uselist=False
     )
+    assets: Mapped[list["DeviceAsset"]] = relationship(
+        back_populates="device", cascade="all, delete-orphan"
+    )
 
 
 class DeviceCredential(Base):
@@ -101,3 +123,24 @@ class DeviceCredential(Base):
     rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     device: Mapped["Device"] = relationship(back_populates="credential")
+
+
+class DeviceAsset(Base):
+    __tablename__ = "device_assets"
+    __table_args__ = (UniqueConstraint("device_id", "serial_number", name="uq_device_asset_serial"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    device_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    )
+    asset_type: Mapped[str] = mapped_column(String(64), nullable=False)  # pv, mppt, logger, sensor
+    brand: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    serial_number: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    warranty_years: Mapped[int | None] = mapped_column(Integer, nullable=True, default=2)
+    is_spare: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    installed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
+
+    device: Mapped["Device"] = relationship(back_populates="assets")
+

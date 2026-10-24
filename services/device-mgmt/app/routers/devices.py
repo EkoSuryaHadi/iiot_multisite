@@ -6,8 +6,15 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import CurrentUser, get_current_user, require_admin, require_operator, resolve_tenant_scope
-from app.models import Device, DeviceCredential, Role, Site, _now
-from app.schemas import DeviceCreate, DeviceCredentialOut, DeviceOut, DeviceUpdate
+from app.models import Device, DeviceAsset, DeviceCredential, Role, Site, _now
+from app.schemas import (
+    DeviceAssetCreate,
+    DeviceAssetOut,
+    DeviceCreate,
+    DeviceCredentialOut,
+    DeviceOut,
+    DeviceUpdate,
+)
 from app.security import generate_device_password, hash_secret
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -126,3 +133,73 @@ def provision_credentials(
         password=plain_password,
         mqtt_topic_prefix=f"t/{tenant.slug}/s/{site.slug}/d/{device.device_key}",
     )
+
+
+@router.post("/{device_id}/assets", response_model=DeviceAssetOut, status_code=status.HTTP_201_CREATED)
+def create_device_asset(
+    device_id: uuid.UUID,
+    payload: DeviceAssetCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_operator),
+) -> DeviceAsset:
+    device = db.scalar(_scoped_query(current_user).where(Device.id == device_id))
+    if device is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device tidak ditemukan")
+
+    exists = db.scalar(
+        select(DeviceAsset).where(
+            DeviceAsset.device_id == device.id, DeviceAsset.serial_number == payload.serial_number
+        )
+    )
+    if exists:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Nomor seri aset sudah terdaftar pada device ini",
+        )
+
+    asset = DeviceAsset(
+        device_id=device.id,
+        **payload.model_dump(),
+    )
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+@router.get("/{device_id}/assets", response_model=list[DeviceAssetOut])
+def list_device_assets(
+    device_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> list[DeviceAsset]:
+    device = db.scalar(_scoped_query(current_user).where(Device.id == device_id))
+    if device is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device tidak ditemukan")
+    return list(
+        db.scalars(
+            select(DeviceAsset).where(DeviceAsset.device_id == device.id).order_by(DeviceAsset.created_at)
+        )
+    )
+
+
+@router.delete("/{device_id}/assets/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_device_asset(
+    device_id: uuid.UUID,
+    asset_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_operator),
+) -> None:
+    device = db.scalar(_scoped_query(current_user).where(Device.id == device_id))
+    if device is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device tidak ditemukan")
+
+    asset = db.scalar(
+        select(DeviceAsset).where(DeviceAsset.id == asset_id, DeviceAsset.device_id == device.id)
+    )
+    if asset is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aset tidak ditemukan")
+
+    db.delete(asset)
+    db.commit()
+
