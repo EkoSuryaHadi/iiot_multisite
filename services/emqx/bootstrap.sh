@@ -205,4 +205,25 @@ if [ $RULE_STATUS_RC -ne 0 ]; then
 fi
 echo "[bootstrap] rule ingest_status terpasang."
 
+echo "[bootstrap] memasang rule ingest_gateway_data (data/# -> /ingest)..."
+set +e
+curl -sf -X POST "$DASHBOARD_URL/api/v5/rules" -H "Content-Type: application/json" -H "$AUTH_HEADER" -d '{
+  "id": "ingest_gateway_data",
+  "sql": "SELECT topic, payload, clientid, timestamp FROM \"data/#\"",
+  "actions": ["http:analytics_api_ingest"],
+  "description": "Kirim data gateway IoT / Haiwell ke analytics-api /ingest"
+}' >/tmp/rule_haiwell.json 2>&1
+RULE_HAIWELL_RC=$?
+set -e
+if [ $RULE_HAIWELL_RC -ne 0 ]; then
+  echo "[bootstrap] rule ingest_gateway_data sudah ada, update..."
+  curl -sf -X PUT "$DASHBOARD_URL/api/v5/rules/ingest_gateway_data" \
+    -H "Content-Type: application/json" -H "$AUTH_HEADER" -d '{
+      "sql": "SELECT topic, payload, clientid, timestamp FROM \"data/#\"",
+      "actions": ["http:analytics_api_ingest"],
+      "description": "Kirim data gateway IoT / Haiwell ke analytics-api /ingest"
+    }' >/dev/null
+fi
+echo "[bootstrap] rule ingest_gateway_data terpasang."
+
 echo "[bootstrap] selesai total. Rule Engine siap mengalirkan telemetry & status ke ClickHouse via analytics-api."

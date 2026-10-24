@@ -17,18 +17,26 @@ def decide(identity: Identity, topic: str, action: str) -> bool:
 
     if identity.kind == "device":
         parsed = parse_device_topic(topic)
-        if parsed is None:
+        if parsed is not None:
+            if (
+                parsed.tenant_slug == identity.tenant_slug
+                and parsed.site_slug == identity.site_slug
+                and parsed.device_key == identity.device_key
+            ):
+                if action == "publish":
+                    return parsed.suffix in DEVICE_PUBLISHABLE_SUFFIXES
+                if action == "subscribe":
+                    return parsed.suffix in DEVICE_SUBSCRIBABLE_SUFFIXES
             return False
-        if (
-            parsed.tenant_slug != identity.tenant_slug
-            or parsed.site_slug != identity.site_slug
-            or parsed.device_key != identity.device_key
-        ):
-            return False
+
+        # Mendukung gateway IoT / Haiwell yang mem-publish ke format data/...
         if action == "publish":
-            return parsed.suffix in DEVICE_PUBLISHABLE_SUFFIXES
+            if topic.startswith("data/") and identity.device_key and identity.device_key in topic:
+                return True
         if action == "subscribe":
-            return parsed.suffix in DEVICE_SUBSCRIBABLE_SUFFIXES
+            if topic in {"#", "data/#"} or topic.startswith("data/") or topic.startswith("cmd/"):
+                return True
+
         return False
 
     if identity.kind == "user":

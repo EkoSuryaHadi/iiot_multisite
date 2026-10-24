@@ -6,7 +6,7 @@ salah selalu ditolak meskipun baris cache belum expired.
 """
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.cache import authn_cache
@@ -34,8 +34,18 @@ class UserRow:
 
 def find_device_by_client_id(db: Session, client_id: str) -> DeviceRow | None:
     def _load() -> DeviceRow | None:
+        clean_key = client_id.split("/")[0].strip()
         row = db.scalar(
-            select(DeviceCredential).where(DeviceCredential.client_id == client_id)
+            select(DeviceCredential)
+            .join(Device, Device.id == DeviceCredential.device_id)
+            .where(
+                or_(
+                    DeviceCredential.client_id == client_id,
+                    DeviceCredential.client_id == clean_key,
+                    Device.device_key == client_id,
+                    Device.device_key == clean_key,
+                )
+            )
         )
         if row is None:
             return None

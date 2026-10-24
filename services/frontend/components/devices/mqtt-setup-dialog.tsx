@@ -28,17 +28,15 @@ export function MqttSetupDialog({
 
   const effectiveTenant = tenantSlug || "{tenant_slug}";
   const effectiveSite = site?.slug || "{site_slug}";
-  const topic = `telemetry/${effectiveTenant}/${effectiveSite}/${device.device_key}`;
+  const topic = `t/${effectiveTenant}/s/${effectiveSite}/d/${device.device_key}/telemetry`;
 
   const samplePayload = JSON.stringify(
     {
-      ts: new Date().toISOString(),
-      metrics: {
-        temperature: 28.5,
-        humidity: 62.0,
-        voltage: 220.4,
-        status: 1,
-      },
+      ts: Math.floor(Date.now() / 1000),
+      temperature: 28.5,
+      humidity: 62.0,
+      voltage: 220.4,
+      power: 1540.2,
     },
     null,
     2
@@ -142,7 +140,7 @@ export function MqttSetupDialog({
               {samplePayload}
             </pre>
             <p className="text-[11px] text-neutral-500">
-              * Key metrik di dalam objek <code>metrics</code> bersifat dinamis (e.g. temperature, voltage, speed) dan akan otomatis diagregasi oleh ClickHouse.
+              * Key metrik numerik bersifat dinamis (e.g. <code>temperature</code>, <code>voltage</code>, <code>power</code>) dan otomatis disimpan serta diagregasi oleh ClickHouse.
             </p>
           </div>
         </div>
