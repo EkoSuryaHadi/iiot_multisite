@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS telemetry
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(ts)
 ORDER BY (tenant_slug, site_slug, device_key, metric_name, ts)
-TTL toDateTime(ts) + INTERVAL 180 DAY
+TTL toDateTime(ts) + INTERVAL 730 DAY
 SETTINGS index_granularity = 8192;
 
 CREATE TABLE IF NOT EXISTS device_status
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS device_status
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(ts)
 ORDER BY (tenant_slug, site_slug, device_key, ts)
-TTL toDateTime(ts) + INTERVAL 180 DAY
+TTL toDateTime(ts) + INTERVAL 730 DAY
 SETTINGS index_granularity = 8192;
 
 -- Agregasi 1 menit (avg/min/max/count per metrik) via AggregatingMergeTree + Materialized View.

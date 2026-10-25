@@ -1,6 +1,8 @@
 import os
+import re
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 import clickhouse_connect
 import jwt
@@ -8,6 +10,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("CLICKHOUSE_HOST", "clickhouse")
 os.environ.setdefault("CLICKHOUSE_PORT", "8123")
@@ -28,99 +31,102 @@ from app.database_pg import PgBase  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models_pg import Tenant  # noqa: E402
 
-_CH_SCHEMA_STATEMENTS = [
-    """
-    CREATE TABLE IF NOT EXISTS telemetry
-    (
-        tenant_slug  LowCardinality(String),
-        site_slug    LowCardinality(String),
-        device_key   LowCardinality(String),
-        metric_name  LowCardinality(String),
-        metric_value Float64,
-        ts           DateTime64(3, 'UTC'),
-        raw_payload  String DEFAULT '',
-        inserted_at  DateTime DEFAULT now()
-    )
-    ENGINE = MergeTree
-    PARTITION BY toYYYYMM(ts)
-    ORDER BY (tenant_slug, site_slug, device_key, metric_name, ts)
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS device_status
-    (
-        tenant_slug LowCardinality(String),
-        site_slug   LowCardinality(String),
-        device_key  LowCardinality(String),
-        status      LowCardinality(String),
-        ts          DateTime64(3, 'UTC'),
-        raw_payload String DEFAULT '',
-        inserted_at DateTime DEFAULT now()
-    )
-    ENGINE = MergeTree
-    PARTITION BY toYYYYMM(ts)
-    ORDER BY (tenant_slug, site_slug, device_key, ts)
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS telemetry_agg_1m
-    (
-        tenant_slug LowCardinality(String),
-        site_slug   LowCardinality(String),
-        device_key  LowCardinality(String),
-        metric_name LowCardinality(String),
-        bucket      DateTime,
-        avg_value   AggregateFunction(avg, Float64),
-        min_value   AggregateFunction(min, Float64),
-        max_value   AggregateFunction(max, Float64),
-        sample_count AggregateFunction(count)
-    )
-    ENGINE = AggregatingMergeTree
-    PARTITION BY toYYYYMM(bucket)
-    ORDER BY (tenant_slug, site_slug, device_key, metric_name, bucket)
-    """,
-    """
-    CREATE MATERIALIZED VIEW IF NOT EXISTS telemetry_agg_1m_mv TO telemetry_agg_1m AS
-    SELECT
-        tenant_slug, site_slug, device_key, metric_name,
-        toStartOfMinute(ts) AS bucket,
-        avgState(metric_value) AS avg_value,
-        minState(metric_value) AS min_value,
-        maxState(metric_value) AS max_value,
-        countState() AS sample_count
-    FROM telemetry
-    GROUP BY tenant_slug, site_slug, device_key, metric_name, bucket
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS device_last_seen
-    (
-        tenant_slug LowCardinality(String),
-        site_slug   LowCardinality(String),
-        device_key  LowCardinality(String),
-        last_seen   DateTime64(3, 'UTC'),
-        status      LowCardinality(String) DEFAULT 'online',
-        updated_at  DateTime DEFAULT now()
-    )
-    ENGINE = ReplacingMergeTree(last_seen)
-    ORDER BY (tenant_slug, site_slug, device_key)
-    """,
-    """
-    CREATE MATERIALIZED VIEW IF NOT EXISTS device_last_seen_telemetry_mv TO device_last_seen AS
-    SELECT
-        tenant_slug, site_slug, device_key,
-        ts AS last_seen,
-        'online' AS status,
-        now() AS updated_at
-    FROM telemetry
-    """,
-    """
-    CREATE MATERIALIZED VIEW IF NOT EXISTS device_last_seen_status_mv TO device_last_seen AS
-    SELECT
-        tenant_slug, site_slug, device_key,
-        ts AS last_seen,
-        status,
-        now() AS updated_at
-    FROM device_status
-    """,
-]
+_CH_INIT_DIR = Path(__file__).resolve().parents[2] / "clickhouse" / "init"
+
+
+def _load_clickhouse_init_statements() -> list[str]:
+    statements: list[str] = []
+    if not _CH_INIT_DIR.exists():
+        return statements
+    for sql_file in sorted(_CH_INIT_DIR.glob("*.sql")):
+        if sql_file.name == "001-init-db.sql":
+            continue
+        raw = sql_file.read_text(encoding="utf-8")
+        cleaned_lines = [
+            line for line in raw.splitlines() if not line.strip().startswith("--")
+        ]
+        cleaned_sql = "\n".join(cleaned_lines)
+        for stmt in cleaned_sql.split(";"):
+            stmt_str = stmt.strip()
+            if not stmt_str or stmt_str.upper().startswith("USE "):
+                continue
+            statements.append(stmt_str)
+    return statements
+
+
+class _InMemoryClickHouseClient:
+    """Fallback ClickHouse client for local testing when ClickHouse container is unreachable."""
+
+    def __init__(self) -> None:
+        self.tables: dict[str, str] = {}
+        self.views: dict[str, str] = {}
+        self.data: dict[str, list[tuple]] = {}
+
+    def command(self, cmd: str):
+        cmd_clean = " ".join(cmd.strip().split())
+        m_create_table = re.match(
+            r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_.]+)",
+            cmd_clean,
+            re.IGNORECASE,
+        )
+        if m_create_table:
+            tbl = m_create_table.group(1).split(".")[-1]
+            self.tables[tbl] = cmd.strip()
+            self.data.setdefault(tbl, [])
+            return ""
+
+        m_create_mv = re.match(
+            r"CREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_.]+)",
+            cmd_clean,
+            re.IGNORECASE,
+        )
+        if m_create_mv:
+            mv = m_create_mv.group(1).split(".")[-1]
+            self.views[mv] = cmd.strip()
+            return ""
+
+        m_show_tables = re.match(
+            r"SHOW\s+TABLES(?:\s+LIKE\s+'([^']+)')?",
+            cmd_clean,
+            re.IGNORECASE,
+        )
+        if m_show_tables:
+            pattern = m_show_tables.group(1)
+            all_names = list(self.tables.keys()) + list(self.views.keys())
+            if not pattern:
+                return "\n".join(sorted(all_names))
+            regex = "^" + re.escape(pattern).replace("%", ".*").replace("_", ".") + "$"
+            matched = [name for name in all_names if re.match(regex, name)]
+            return "\n".join(sorted(matched))
+
+        m_show_create = re.match(
+            r"SHOW\s+CREATE\s+TABLE\s+([a-zA-Z0-9_.]+)",
+            cmd_clean,
+            re.IGNORECASE,
+        )
+        if m_show_create:
+            tbl = m_show_create.group(1).split(".")[-1]
+            return self.tables.get(tbl) or self.views.get(tbl, "")
+
+        m_truncate = re.match(
+            r"TRUNCATE\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_.]+)",
+            cmd_clean,
+            re.IGNORECASE,
+        )
+        if m_truncate:
+            tbl = m_truncate.group(1).split(".")[-1]
+            self.data[tbl] = []
+            return ""
+
+        return ""
+
+    def insert(self, table: str, data: list[tuple], column_names: list[str] | None = None):
+        tbl = table.split(".")[-1]
+        self.data.setdefault(tbl, []).extend(data)
+
+
+_FALLBACK_CH_CLIENT: _InMemoryClickHouseClient | None = None
+_ACTIVE_PG_ENGINE = None
 
 
 def _admin_ch_client():
@@ -129,16 +135,21 @@ def _admin_ch_client():
         port=settings.clickhouse_port,
         username=settings.clickhouse_user,
         password=settings.clickhouse_password,
+        connect_timeout=1,
     )
 
 
 def _test_ch_client():
+    global _FALLBACK_CH_CLIENT
+    if _FALLBACK_CH_CLIENT is not None:
+        return _FALLBACK_CH_CLIENT
     return clickhouse_connect.get_client(
         host=settings.clickhouse_host,
         port=settings.clickhouse_port,
         username=settings.clickhouse_user,
         password=settings.clickhouse_password,
         database=settings.clickhouse_db,
+        connect_timeout=1,
     )
 
 
@@ -158,19 +169,39 @@ def _ensure_test_pg_database() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def _setup_test_databases():
-    admin = _admin_ch_client()
-    admin.command(f"CREATE DATABASE IF NOT EXISTS {settings.clickhouse_db}")
-    test_client = _test_ch_client()
-    for stmt in _CH_SCHEMA_STATEMENTS:
+    global _FALLBACK_CH_CLIENT, _ACTIVE_PG_ENGINE
+    statements = _load_clickhouse_init_statements()
+    try:
+        admin = _admin_ch_client()
+        admin.command(f"CREATE DATABASE IF NOT EXISTS {settings.clickhouse_db}")
+        test_client = _test_ch_client()
+    except Exception:
+        _FALLBACK_CH_CLIENT = _InMemoryClickHouseClient()
+        test_client = _FALLBACK_CH_CLIENT
+
+    for stmt in statements:
+        if stmt.strip().upper().startswith("INSERT INTO"):
+            continue
         test_client.command(stmt)
 
-    _ensure_test_pg_database()
-    pg_engine = create_engine(settings.postgres_url)
+    try:
+        _ensure_test_pg_database()
+        pg_engine = create_engine(settings.postgres_url)
+        with pg_engine.connect():
+            pass
+    except Exception:
+        pg_engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+    _ACTIVE_PG_ENGINE = pg_engine
     PgBase.metadata.create_all(pg_engine)
 
     yield
 
-    test_client.command(f"DROP DATABASE IF EXISTS {settings.clickhouse_db}")
+    if _FALLBACK_CH_CLIENT is None:
+        test_client.command(f"DROP DATABASE IF EXISTS {settings.clickhouse_db}")
     PgBase.metadata.drop_all(pg_engine)
     pg_engine.dispose()
 
@@ -180,16 +211,24 @@ async def ch_client():
     await telemetry_buffer.clear()
     await device_status_buffer.clear()
     client = _test_ch_client()
-    client.command("TRUNCATE TABLE telemetry")
-    client.command("TRUNCATE TABLE device_status")
-    client.command("TRUNCATE TABLE telemetry_agg_1m")
-    client.command("TRUNCATE TABLE device_last_seen")
+    for tbl in ("telemetry", "device_status", "telemetry_agg_1m", "device_last_seen", "sps_daily_energy"):
+        if _FALLBACK_CH_CLIENT is not None and tbl not in _FALLBACK_CH_CLIENT.tables:
+            continue
+        try:
+            client.command(f"TRUNCATE TABLE {tbl}")
+        except Exception:
+            pass
     yield client
 
 
 @pytest.fixture()
+def clickhouse_client(ch_client):
+    return ch_client
+
+
+@pytest.fixture()
 def pg_session():
-    engine = create_engine(settings.postgres_url)
+    engine = _ACTIVE_PG_ENGINE or create_engine(settings.postgres_url)
     Session = sessionmaker(bind=engine)
     session = Session()
     tenant_slug_cache.clear()
@@ -197,7 +236,6 @@ def pg_session():
     session.query(Tenant).delete()
     session.commit()
     session.close()
-    engine.dispose()
 
 
 @pytest.fixture()

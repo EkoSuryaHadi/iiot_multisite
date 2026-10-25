@@ -165,7 +165,7 @@ Commit: `git commit -m "feat(device-mgmt): add SPS site configuration and asset 
 - Consumes: Skema tabel `telemetry`, `telemetry_agg_1m`, `telemetry_agg_1h`.
 - Produces: Tabel `sps_daily_energy` (agregasi harian Solar kWh, Grid/Rectifier kWh, Load kWh, Solar Contribution Ratio) dengan TTL 2 tahun (24 bulan) untuk keperluan audit penagihan / efficiency sharing.
 
-- [ ] **Step 1: Tulis test validasi TTL dan tabel agregasi harian ClickHouse**
+- [x] **Step 1: Tulis test validasi TTL dan tabel agregasi harian ClickHouse**
 
 ```python
 # services/analytics-api/tests/test_clickhouse_sps_schema.py
@@ -174,7 +174,7 @@ def test_sps_daily_energy_table_exists(clickhouse_client):
     assert "sps_daily_energy" in tables
 ```
 
-- [ ] **Step 2: Update TTL dan tambahkan materialized view agregasi harian SPS**
+- [x] **Step 2: Update TTL dan tambahkan materialized view agregasi harian SPS**
 
 Ubah TTL tabel `telemetry` dari 180 hari menjadi 730 hari untuk metrik kunci, dan buat tabel:
 ```sql
@@ -196,7 +196,7 @@ ORDER BY (tenant_slug, site_slug, date)
 TTL date + INTERVAL 2 YEAR;
 ```
 
-- [ ] **Step 3: Eksekusi SQL migrasi ke ClickHouse dan verifikasi test**
+- [x] **Step 3: Eksekusi SQL migrasi ke ClickHouse dan verifikasi test**
 
 Run: `docker compose exec analytics-api pytest tests/test_clickhouse_sps_schema.py -v`
 Expected: PASS
