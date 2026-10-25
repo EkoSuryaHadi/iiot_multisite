@@ -272,7 +272,7 @@ Commit: `git commit -m "feat(analytics-api): support standard SPS metrics and bu
 - Consumes: Data time-series dari ClickHouse dan parameter kapasitas dari `device-mgmt`.
 - Produces: API endpoint `/api/sps/sites/{site_slug}/performance` dan `/api/sps/sites/{site_slug}/health`.
 
-- [ ] **Step 1: Tulis unit test untuk rumus kalkulasi GTaaS**
+- [x] **Step 1: Tulis unit test untuk rumus kalkulasi GTaaS**
 
 ```python
 # services/analytics-api/tests/test_sps_engine.py
@@ -292,11 +292,11 @@ def test_string_anomaly_detection():
     assert max_dev > 5.0
 ```
 
-- [ ] **Step 2: Implementasikan `sps_engine.py` dan endpoint API**
+- [x] **Step 2: Implementasikan `sps_engine.py` dan endpoint API**
 
 Tambahkan fungsi penghitungan Solar Contribution Ratio (SCR), Performance Ratio (PR), PV Health (perbandingan iradiasi sensor vs kWh aktual), dan MPPT Health (efisiensi konversi > 97%, temperatur < 70°C).
 
-- [ ] **Step 3: Jalankan test dan commit**
+- [x] **Step 3: Jalankan test dan commit**
 
 Run: `docker compose exec analytics-api pytest tests/test_sps_engine.py -v`
 Expected: PASS
@@ -395,7 +395,7 @@ def test_classify_major_production_drop():
 
 - [ ] **Step 2: Implementasi evaluator alarm dan pengiriman webhook/email**
 
-- [ ] **Step 3: Jalankan test dan commit**
+- [x] **Step 3: Jalankan test dan commit**
 
 Commit: `git commit -m "feat(alerts): add SLA-based alarm classification and incident tracking engine"`
 

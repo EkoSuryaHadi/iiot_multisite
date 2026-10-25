@@ -8,7 +8,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.buffer import device_status_buffer, telemetry_buffer
 from app.clickhouse_client import get_client
 from app.rate_limit import limiter
-from app.routers import devices, ingest, summary, telemetry
+from app.routers import devices, ingest, sps_analytics, summary, telemetry
 
 
 @asynccontextmanager
@@ -32,6 +32,7 @@ app.include_router(ingest.router)
 app.include_router(telemetry.router)
 app.include_router(devices.router)
 app.include_router(summary.router)
+app.include_router(sps_analytics.router)
 
 
 @app.get("/health", tags=["health"])
