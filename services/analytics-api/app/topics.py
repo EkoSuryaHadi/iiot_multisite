@@ -7,6 +7,7 @@ from app.database_pg import PgSessionLocal
 # Konvensi topik standar: t/{tenant_slug}/s/{site_slug}/d/{device_id}/telemetry|status|cmd|resp
 TELEMETRY_SUFFIX = "telemetry"
 STATUS_SUFFIX = "status"
+BUFFERED_SUFFIX = "buffered"
 
 
 @dataclass
@@ -44,11 +45,23 @@ def parse_device_topic(topic: str) -> ParsedDeviceTopic | None:
 
     # Format standar IIoT: t/{tenant}/s/{site}/d/{device}/{suffix}
     if len(parts) == 7 and parts[0] == "t" and parts[2] == "s" and parts[4] == "d":
+        suffix = TELEMETRY_SUFFIX if parts[6] == BUFFERED_SUFFIX else parts[6]
         return ParsedDeviceTopic(
             tenant_slug=parts[1],
             site_slug=parts[3],
             device_key=parts[5],
-            suffix=parts[6],
+            suffix=suffix,
+        )
+
+    # Format topik khusus SPS: sps/{tenant}/{site}/{device}[/{suffix}]
+    if parts and parts[0] == "sps" and len(parts) in (4, 5):
+        raw_suffix = parts[4] if len(parts) == 5 else TELEMETRY_SUFFIX
+        suffix = TELEMETRY_SUFFIX if raw_suffix == BUFFERED_SUFFIX else raw_suffix
+        return ParsedDeviceTopic(
+            tenant_slug=parts[1],
+            site_slug=parts[2],
+            device_key=parts[3],
+            suffix=suffix,
         )
 
     # Format Gateway Haiwell / IoT: data/{project}/{group}/{device_key}

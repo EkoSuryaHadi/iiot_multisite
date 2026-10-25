@@ -217,7 +217,7 @@ Commit: `git commit -m "feat(clickhouse): add 24-month retention and sps_daily_e
 - Consumes: Payload MQTT dari Data Logger 4G (Modbus RTU ke MPPT dan Sensor).
 - Produces: Ekstraksi metrik terstandardisasi: `v_pv`, `i_pv`, `p_pv`, `v_mppt_out`, `i_mppt_out`, `p_mppt_out`, `v_busbar`, `i_rectifier`, `p_rectifier`, `irradiance`, `temp_mppt`.
 
-- [ ] **Step 1: Tulis unit test untuk parsing payload SPS lengkap dan data buffering**
+- [x] **Step 1: Tulis unit test untuk parsing payload SPS lengkap dan data buffering**
 
 ```python
 # services/analytics-api/tests/test_sps_ingest.py
@@ -250,11 +250,11 @@ def test_store_and_forward_timestamp_preservation():
     assert abs((resolved - past_time).total_seconds()) < 2
 ```
 
-- [ ] **Step 2: Verifikasi test dan pastikan backward compatibility tetap terjaga**
+- [x] **Step 2: Verifikasi test dan pastikan backward compatibility tetap terjaga**
 
 Run: `docker compose exec analytics-api pytest tests/test_sps_ingest.py -v`
 
-- [ ] **Step 3: Update `ingest_logic.py` dan validasi**
+- [x] **Step 3: Update `ingest_logic.py` dan validasi**
 
 Commit: `git commit -m "feat(analytics-api): support standard SPS metrics and buffered timestamps"`
 
