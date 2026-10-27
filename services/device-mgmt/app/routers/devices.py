@@ -10,6 +10,7 @@ from app.models import Device, DeviceAsset, DeviceCredential, Role, Site, _now
 from app.schemas import (
     DeviceAssetCreate,
     DeviceAssetOut,
+    DeviceClaimRequest,
     DeviceCreate,
     DeviceCredentialOut,
     DeviceOut,
@@ -55,6 +56,43 @@ def list_devices(
     db: Session = Depends(get_db), current_user: CurrentUser = Depends(get_current_user)
 ) -> list[Device]:
     return list(db.scalars(_scoped_query(current_user).order_by(Device.created_at)))
+
+
+@router.get("/pending", response_model=list[DeviceOut])
+def list_pending_devices(
+    db: Session = Depends(get_db), current_user: CurrentUser = Depends(get_current_user)
+) -> list[Device]:
+    stmt = _scoped_query(current_user).where(Device.registration_status == "pending").order_by(Device.created_at.desc())
+    return list(db.scalars(stmt))
+
+
+@router.post("/{device_id}/claim", response_model=DeviceOut)
+def claim_device(
+    device_id: uuid.UUID,
+    payload: DeviceClaimRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_operator),
+) -> Device:
+    target_tenant_id = resolve_tenant_scope(current_user, payload.tenant_id)
+
+    # Validasi site tujuan
+    site = db.scalar(select(Site).where(Site.id == payload.site_id, Site.tenant_id == target_tenant_id))
+    if site is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site tidak ditemukan di tenant ini")
+
+    # Cari device
+    device = db.scalar(_scoped_query(current_user).where(Device.id == device_id))
+    if device is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device tidak ditemukan")
+
+    device.tenant_id = target_tenant_id
+    device.site_id = site.id
+    device.name = payload.name
+    device.registration_status = "active"
+
+    db.commit()
+    db.refresh(device)
+    return device
 
 
 @router.get("/{device_id}", response_model=DeviceOut)

@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     jwt_access_expire_minutes: int = 15
     jwt_refresh_expire_minutes: int = 10080
 
+    # MySQL Sync
+    mysql_host: str = "mysql"
+    mysql_port: int = 3306
+    mysql_root_password: str = "change_me_mysql_root"
+    mysql_database: str = "iiot"
+    mysql_sync_enabled: bool = True
+
     @property
     def database_url(self) -> str:
         return (

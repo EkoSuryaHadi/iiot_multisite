@@ -173,8 +173,15 @@ class DeviceOut(BaseModel):
     device_key: str
     name: str
     is_active: bool
+    registration_status: str = "active"
     created_at: datetime
     assets: list[DeviceAssetOut] = []
+
+
+class DeviceClaimRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    site_id: uuid.UUID
+    tenant_id: uuid.UUID | None = None  # Hanya untuk superadmin
 
 
 class DeviceCredentialOut(BaseModel):

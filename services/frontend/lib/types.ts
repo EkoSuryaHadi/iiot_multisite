@@ -24,6 +24,7 @@ export interface Device {
   device_key: string
   name: string
   is_active: boolean
+  registration_status?: "active" | "pending"
   created_at: string
 }
 

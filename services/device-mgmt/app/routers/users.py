@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import CurrentUser, require_admin, resolve_tenant_scope
 from app.models import Role, User
+from app.mysql_sync import delete_mysql_user, sync_mysql_user
 from app.schemas import UserCreate, UserOut, UserUpdate
 from app.security import hash_secret
 
@@ -44,6 +45,10 @@ def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    # Sinkronisasi otomatis ke database MySQL (port 3306)
+    sync_mysql_user(payload.email, payload.password)
+
     return user
 
 
@@ -76,13 +81,20 @@ def update_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User tidak ditemukan")
 
     data = payload.model_dump(exclude_unset=True)
+    plain_password = None
     if "password" in data:
-        user.hashed_password = hash_secret(data.pop("password"))
+        plain_password = data.pop("password")
+        user.hashed_password = hash_secret(plain_password)
     for field, value in data.items():
         setattr(user, field, value)
 
     db.commit()
     db.refresh(user)
+
+    # Sinkronisasi password baru ke MySQL
+    if plain_password is not None:
+        sync_mysql_user(user.email, plain_password)
+
     return user
 
 
@@ -95,5 +107,10 @@ def delete_user(
     user = db.scalar(_scoped_query(current_user).where(User.id == user_id))
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User tidak ditemukan")
+    email = user.email
     db.delete(user)
     db.commit()
+
+    # Hapus user dari MySQL
+    delete_mysql_user(email)
+

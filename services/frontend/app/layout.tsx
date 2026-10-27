@@ -6,8 +6,11 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"],display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Smart Energy Management",
-  description: "Saving Energy Consumption",
+  title: "Gaungnusa | Industrial IoT Platform",
+  description: "High-Frequency Multi-Site Industrial IoT Telemetry & Monitoring Platform",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default async function RootLayout({

@@ -8,9 +8,9 @@ import type { Metadata } from "next";
 import Image from "next/image";
 
 const metadata: Metadata = {
-  title: "Register & Create Account |  Admin Dashboard",
+  title: "Sign In | IIoT Platform",
   description:
-    "Create a new user account and get started with the Admin Dashboard built with Next.js and Tailwind CSS.",
+    "Sign in to your account to access the IIoT Multi-Site Platform console.",
 };
 
 const forgotPassImage: StaticImg = {

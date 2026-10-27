@@ -8,3 +8,5 @@ psycopg[binary]>=3.2,<3.4
 pyjwt==2.10.1
 cachetools==5.5.0
 slowapi==0.1.9
+pymysql>=1.1.0
+cryptography>=42.0.0

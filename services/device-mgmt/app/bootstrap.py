@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.models import Role, User
+from app.mysql_sync import sync_mysql_user
 from app.security import hash_secret
 
 
@@ -21,18 +22,21 @@ def main() -> None:
     try:
         existing = db.scalar(select(User).where(User.tenant_id.is_(None), User.email == email))
         if existing:
-            print(f"Superadmin '{email}' sudah ada, tidak ada perubahan.")
-            return
+            print(f"Superadmin '{email}' sudah ada, tidak ada perubahan di Postgres.")
+        else:
+            user = User(
+                tenant_id=None,
+                email=email,
+                hashed_password=hash_secret(password),
+                role=Role.SUPERADMIN,
+            )
+            db.add(user)
+            db.commit()
+            print(f"Superadmin '{email}' berhasil dibuat di Postgres.")
 
-        user = User(
-            tenant_id=None,
-            email=email,
-            hashed_password=hash_secret(password),
-            role=Role.SUPERADMIN,
-        )
-        db.add(user)
-        db.commit()
-        print(f"Superadmin '{email}' berhasil dibuat.")
+        # Selalu sinkronkan superadmin ke MySQL
+        sync_mysql_user(email, password)
+        print(f"Superadmin '{email}' disinkronkan ke MySQL.")
     finally:
         db.close()
 

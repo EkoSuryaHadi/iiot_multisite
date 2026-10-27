@@ -1,34 +1,27 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import Image from "next/image";
-import { useTheme } from "next-themes";
+import React from "react";
+import GaungnusaLogo from "./gaungnusa-logo";
 
-import LogoDark from "@/public/assets/images/logo.png";
-import LogoWhite from "@/public/assets/images/logo-light.png";
-import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
+interface ThemeLogoProps {
+  className?: string;
+  size?: number;
+  iconOnly?: boolean;
+  showTagline?: boolean;
+}
 
-function ThemeLogo() {
-  const { theme } = useTheme();
-  const isCollapsed = useSidebarCollapsed();
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  // Don't render until mounted to avoid hydration mismatch or wrong theme
-  if (!isMounted) return null;
-
+export default function ThemeLogo({
+  className = "",
+  size = 38,
+  iconOnly = false,
+  showTagline = true,
+}: ThemeLogoProps) {
   return (
-    <Image
-      src={theme === "dark" ? LogoWhite : LogoDark}
-      alt="Logo"
-      width={168}
-      height={40}
-      priority
+    <GaungnusaLogo
+      size={size}
+      iconOnly={iconOnly}
+      showTagline={showTagline}
+      className={className}
     />
   );
 }
-
-export default ThemeLogo;

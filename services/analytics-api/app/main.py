@@ -7,6 +7,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.buffer import device_status_buffer, telemetry_buffer
 from app.clickhouse_client import get_client
+from app.mysql_buffer import mysql_telemetry_buffer
 from app.rate_limit import limiter
 from app.routers import devices, ingest, sps_analytics, summary, telemetry
 
@@ -15,11 +16,13 @@ from app.routers import devices, ingest, sps_analytics, summary, telemetry
 async def lifespan(app: FastAPI):
     telemetry_buffer.start()
     device_status_buffer.start()
+    mysql_telemetry_buffer.start_periodic_flush()
     try:
         yield
     finally:
         await telemetry_buffer.stop()
         await device_status_buffer.stop()
+        await mysql_telemetry_buffer.stop()
 
 
 app = FastAPI(title="IIOT Analytics API", version="0.1.0", lifespan=lifespan)

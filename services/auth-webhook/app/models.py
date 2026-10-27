@@ -5,7 +5,7 @@ auth-webhook TIDAK menjalankan migration sendiri - tabel sudah ada di database
 """
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -58,7 +58,10 @@ class Device(Base):
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"))
     site_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sites.id"))
     device_key: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(128))
     is_active: Mapped[bool] = mapped_column(Boolean)
+    registration_status: Mapped[str] = mapped_column(String(32), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     tenant: Mapped["Tenant"] = relationship(viewonly=True)
     site: Mapped["Site"] = relationship(viewonly=True)

@@ -17,5 +17,5 @@ def authz(payload: AuthzRequest, db: Session = Depends(get_db)) -> AuthzResponse
     if identity is None:
         return AuthzResponse(result="deny")
 
-    allowed = decide(identity, payload.topic, payload.action)
+    allowed = decide(identity, payload.topic, payload.action, db)
     return AuthzResponse(result="allow" if allowed else "deny")

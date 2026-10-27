@@ -5,6 +5,7 @@ networks:
 volumes:
   postgres-data:
   clickhouse-data:
+  mysql-data:
   emqx1-data:
   emqx2-data:
   emqx3-data:
@@ -46,6 +47,7 @@ services:
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./services/clickhouse/init:/docker-entrypoint-initdb.d
+      - ./services/clickhouse/config.d/tuning.xml:/etc/clickhouse-server/config.d/tuning.xml:ro
     networks:
       - iiot-net
     healthcheck:
@@ -58,6 +60,28 @@ services:
       nofile:
         soft: 262144
         hard: 262144
+
+  mysql:
+    image: mysql:8.0
+    container_name: iiot-mysql
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_mysql_root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-iiot}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./services/mysql/init:/docker-entrypoint-initdb.d
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-change_me_mysql_root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   emqx1:
     image: emqx/emqx:5.6.1
@@ -164,6 +188,11 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_ALGORITHM: ${JWT_ALGORITHM}
       INGEST_SECRET: ${INGEST_SECRET}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: ${MYSQL_DATABASE:-iiot}
+      MYSQL_USER: ${MYSQL_CLIENT_USER:-andreas.nugroho@gaungnusa.com}
+      MYSQL_PASSWORD: ${MYSQL_CLIENT_PASSWORD:-Password123456}
     ports:
       - "${ANALYTICS_API_PORT}:8000"
     depends_on:
@@ -214,6 +243,10 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM}
       JWT_ACCESS_EXPIRE_MINUTES: ${JWT_ACCESS_EXPIRE_MINUTES}
       JWT_REFRESH_EXPIRE_MINUTES: ${JWT_REFRESH_EXPIRE_MINUTES}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_mysql_root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-iiot}
     ports:
       - "${DEVICE_MGMT_PORT}:8000"
     depends_on:

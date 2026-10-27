@@ -89,8 +89,11 @@ export const sitesApi = {
 // --- Devices ---
 export const devicesApi = {
   list: () => dm.get<Device[]>("/devices"),
+  listPending: () => dm.get<Device[]>("/devices/pending"),
   create: (data: { device_key: string; name: string; site_id: string; tenant_id?: string }) =>
     dm.post<Device>("/devices", data),
+  claim: (id: string, data: { name: string; site_id: string; tenant_id?: string }) =>
+    dm.post<Device>(`/devices/${id}/claim`, data),
   update: (id: string, data: { name?: string; is_active?: boolean }) => dm.patch<Device>(`/devices/${id}`, data),
   remove: (id: string) => dm.delete<void>(`/devices/${id}`),
   provisionCredentials: (id: string) => dm.post<DeviceCredential>(`/devices/${id}/credentials`),

@@ -1,5 +1,6 @@
 "use client";
 
+import { DeviceClaimDialog } from "@/components/devices/device-claim-dialog";
 import { AppSidebar } from "@/components/app-sidebar";
 import Footer from "@/components/layout/footer";
 import Header from "@/components/layout/header";
@@ -38,6 +39,7 @@ export function ClientRoot({
               </div>
               <Footer />
             </main>
+            <DeviceClaimDialog />
             <Toaster position="top-center" reverseOrder={false} />
           </SidebarProvider>
         </TenantProvider>
