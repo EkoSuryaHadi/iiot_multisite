@@ -318,7 +318,7 @@ Commit: `git commit -m "feat(analytics-api): add GTaaS calculation engine for SC
 - Consumes: API Key header `X-Mitratel-API-Key`.
 - Produces: Endpoint publik `/api/v1/external/sites/{site_slug}/metrics` dengan OpenAPI documentation compliant terhadap spesifikasi RKS 2.3.3.c butir 5.
 
-- [ ] **Step 1: Tulis test pengujian API Key dan output skema JSON terbuka**
+- [x] **Step 1: Tulis test pengujian API Key dan output skema JSON terbuka**
 
 ```python
 # services/analytics-api/tests/test_open_api.py
@@ -332,9 +332,9 @@ def test_open_api_authorized(client, valid_api_key):
     assert "solar_contribution_pct" in res.json()
 ```
 
-- [ ] **Step 2: Implementasi autentikasi API Key dan endpoint OpenAPI**
+- [x] **Step 2: Implementasi autentikasi API Key dan endpoint OpenAPI**
 
-- [ ] **Step 3: Verifikasi test dan commit**
+- [x] **Step 3: Verifikasi test dan commit**
 
 Run: `docker compose exec analytics-api pytest tests/test_open_api.py -v`
 Commit: `git commit -m "feat(analytics-api): add Open RESTful API with API Key auth for Mitratel"`
@@ -352,11 +352,11 @@ Commit: `git commit -m "feat(analytics-api): add Open RESTful API with API Key a
 - Consumes: Pesan telemetry yang baru saja di-ingest.
 - Produces: Publish berkala (interval 5 menit) ke broker eksternal Oneflux Mitratel dengan topik `mitratel/gtaas/{tenant_slug}/{site_slug}/telemetry`.
 
-- [ ] **Step 1: Tulis mock test untuk publikasi pesan ke broker Oneflux**
+- [x] **Step 1: Tulis mock test untuk publikasi pesan ke broker Oneflux**
 
-- [ ] **Step 2: Implementasikan worker thread / task asinkron MQTT client**
+- [x] **Step 2: Implementasikan worker thread / task asinkron MQTT client**
 
-- [ ] **Step 3: Verifikasi test dan commit**
+- [x] **Step 3: Verifikasi test dan commit**
 
 Commit: `git commit -m "feat(analytics-api): add Northbound MQTT publisher for Oneflux integration"`
 
@@ -376,7 +376,7 @@ Commit: `git commit -m "feat(analytics-api): add Northbound MQTT publisher for O
 - Consumes: Data telemetry real-time dan status konektivitas device.
 - Produces: Pembuatan insiden otomatis (Critical: SPS mati total / tenant drop; Mayor: produksi drop > 30% / string offline / PMS hilang; Minor: anomali ringan < 30%) beserta timer countdown SLA response & restoration.
 
-- [ ] **Step 1: Tulis test logika klasifikasi alarm sesuai RKS 2.5.4**
+- [x] **Step 1: Tulis test logika klasifikasi alarm sesuai RKS 2.5.4**
 
 ```python
 # services/analytics-api/tests/test_alert_evaluator.py
@@ -393,7 +393,7 @@ def test_classify_major_production_drop():
     assert sev == "MAYOR"  # Response <= 8h, Restoration <= 3x24h
 ```
 
-- [ ] **Step 2: Implementasi evaluator alarm dan pengiriman webhook/email**
+- [x] **Step 2: Implementasi evaluator alarm dan pengiriman webhook/email**
 
 - [x] **Step 3: Jalankan test dan commit**
 
@@ -419,13 +419,13 @@ Commit: `git commit -m "feat(alerts): add SLA-based alarm classification and inc
   - Aliran listrik gabungan $\rightarrow$ **Perangkat Tenant (BTS Menara)**.
   - Indikator status voltase: delta tegangan MPPT vs Float Rectifier (memastikan selisih +0.5V s/d +1.0V terpenuhi untuk pembagian beban otomatis).
 
-- [ ] **Step 1: Buat komponen SVG/Canvas Power Flow dengan animasi CSS pulses**
+- [x] **Step 1: Buat komponen SVG/Canvas Power Flow dengan animasi CSS pulses**
 
-- [ ] **Step 2: Hubungkan data real-time dari endpoint `/api/sps/sites/{site}/performance`**
+- [x] **Step 2: Hubungkan data real-time dari endpoint `/api/sps/sites/{site}/performance`**
 
-- [ ] **Step 3: Integrasikan ke halaman dashboard utama**
+- [x] **Step 3: Integrasikan ke halaman dashboard utama**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Commit: `git commit -m "feat(frontend): add interactive SPS Power Flow diagram card to dashboard"`
 
@@ -445,11 +445,11 @@ Commit: `git commit -m "feat(frontend): add interactive SPS Power Flow diagram c
   3. **Solar Contribution Ratio (%)** (Persentase beban yang ditopang surya).
   4. **ESG Carbon Avoidance (kg $CO_2e$)** (berdasarkan formula emisi jaringan Jawa-Madura-Bali / Luar Jawa).
 
-- [ ] **Step 1: Buat komponen kartu KPI GTaaS dengan visual modern & gradient cards**
+- [x] **Step 1: Buat komponen kartu KPI GTaaS dengan visual modern & gradient cards**
 
-- [ ] **Step 2: Hubungkan kartu KPI ke data agregasi riil**
+- [x] **Step 2: Hubungkan kartu KPI ke data agregasi riil**
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 Commit: `git commit -m "feat(frontend): add GTaaS executive KPI cards for energy, cost and ESG"`
 
@@ -470,13 +470,13 @@ Commit: `git commit -m "feat(frontend): add GTaaS executive KPI cards for energy
   - Nilai penghematan tarif PLN & rasio bagi hasil (*efficiency sharing*).
   - Tombol Ekspor ke Excel (.xlsx) dan PDF siap cetak untuk lampiran tagihan tenant operator.
 
-- [ ] **Step 1: Buat halaman laporan dan tabel data harian**
+- [x] **Step 1: Buat halaman laporan dan tabel data harian**
 
-- [ ] **Step 2: Tambahkan fungsi ekspor CSV/Excel dan format print PDF**
+- [x] **Step 2: Tambahkan fungsi ekspor CSV/Excel dan format print PDF**
 
-- [ ] **Step 3: Tambahkan item menu di sidebar**
+- [x] **Step 3: Tambahkan item menu di sidebar**
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Commit: `git commit -m "feat(frontend): add monthly efficiency sharing statement and export page"`
 
@@ -499,11 +499,11 @@ Commit: `git commit -m "feat(frontend): add monthly efficiency sharing statement
   - Indikator status **Over The Air (OTA)** update firmware remote tanpa perlu hadir ke lokasi site.
   - Alarm jika logger beralih ke baterai internal atau kapasitas baterai backup rendah.
 
-- [ ] **Step 1: Tambahkan ekstraksi metrik internal PMS (`pms_batt_voltage`, `pms_power_source`, `pms_fw_version`, `pms_signal_rssi`)**
+- [x] **Step 1: Tambahkan ekstraksi metrik internal PMS (`pms_batt_voltage`, `pms_power_source`, `pms_fw_version`, `pms_signal_rssi`)**
 
-- [ ] **Step 2: Buat komponen UI hardware status diagnostik pada frontend**
+- [x] **Step 2: Buat komponen UI hardware status diagnostik pada frontend**
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 Commit: `git commit -m "feat(monitoring): add PMS hardware UPS backup and OTA firmware tracking"`
 
