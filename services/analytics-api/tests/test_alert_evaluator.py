@@ -89,3 +89,4 @@ def test_sla_status_countdown_and_breach():
     assert status["is_response_breached"] is True
     assert status["response_time_hours"] >= 5.0
     assert status["is_restoration_breached"] is False
+

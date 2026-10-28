@@ -76,7 +76,7 @@ export default function EfficiencySharingPage() {
       </div>
 
       {/* Header Info Banner */}
-      <Card className="border-emerald-500/30 bg-gradient-to-r from-emerald-950/20 via-slate-900/40 to-slate-900/20 text-slate-200">
+      <Card className="border-emerald-500/30 bg-linear-to-r from-emerald-950/20 via-slate-900/40 to-slate-900/20 text-slate-200">
         <CardContent className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -112,3 +112,4 @@ export default function EfficiencySharingPage() {
     </div>
   )
 }
+

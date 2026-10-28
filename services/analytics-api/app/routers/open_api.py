@@ -224,3 +224,4 @@ def get_external_site_daily_energy(
         "records": records,
         "total": len(records),
     }
+

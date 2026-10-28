@@ -58,3 +58,4 @@ class IncidentTicket(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     site = relationship("Site", backref="incident_tickets")
+

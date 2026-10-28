@@ -58,3 +58,4 @@ async def test_open_api_authorized_daily(client):
     data = res.json()
     assert "records" in data
     assert "total" in data
+

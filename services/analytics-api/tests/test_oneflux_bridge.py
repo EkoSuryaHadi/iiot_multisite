@@ -80,3 +80,4 @@ async def test_start_stop_lifecycle():
     bridge.start()
     await bridge.stop()
     assert bridge._client is None
+

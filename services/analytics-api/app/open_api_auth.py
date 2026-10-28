@@ -28,3 +28,4 @@ def verify_mitratel_api_key(
         )
 
     return x_mitratel_api_key
+
