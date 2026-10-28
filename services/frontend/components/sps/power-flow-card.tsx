@@ -166,7 +166,7 @@ export default function PowerFlowCard({
 
           {/* Interactive Flow Architecture */}
           <div className="relative p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-linear-to-br from-slate-50/80 to-slate-100/50 dark:from-slate-950/80 dark:to-slate-900/60 overflow-x-auto">
-            <div className="min-w-[700px] flex items-center justify-between gap-3">
+            <div className="min-w-175 flex items-center justify-between gap-3">
               {/* PV Array Node */}
               <div className="flex-1 rounded-xl p-3 border-2 border-amber-400/60 bg-white dark:bg-slate-900 shadow-sm relative">
                 <div className="flex items-center justify-between mb-2">
