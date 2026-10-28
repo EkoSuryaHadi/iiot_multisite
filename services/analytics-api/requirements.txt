@@ -11,3 +11,4 @@ slowapi==0.1.9
 pymysql>=1.1.0
 cryptography>=42.0.0
 paho-mqtt>=2.0.0
+
