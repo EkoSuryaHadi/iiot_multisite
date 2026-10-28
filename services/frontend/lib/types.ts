@@ -14,6 +14,14 @@ export interface Site {
   slug: string
   name: string
   is_active: boolean
+  site_type?: string | null
+  pv_capacity_kwp?: number | null
+  mppt_capacity_a?: number | null
+  rectifier_float_voltage?: number | null
+  baseline_kwh_daily?: number | null
+  latitude?: number | null
+  longitude?: number | null
+  tower_type?: string | null
   created_at: string
 }
 
@@ -115,4 +123,90 @@ export interface AlarmItem {
   value?: number
   threshold?: number
   timestamp: string
+}
+
+// --- Mitratel SPS On-Grid (GTaaS) Types ---
+export interface SpsPowerFlow {
+  irradiance: number
+  v_pv: number
+  i_pv: number
+  p_pv: number
+  v_mppt_out: number
+  i_mppt_out: number
+  p_mppt_out: number
+  v_busbar: number
+  i_rectifier: number
+  p_rectifier: number
+  p_load: number
+  temp_mppt: number
+  rectifier_float_voltage: number
+  voltage_delta_v: number
+  load_sharing_active: boolean
+}
+
+export interface SpsPerformanceResponse {
+  tenant_slug: string
+  site_slug: string
+  site_config: {
+    site_type: string
+    pv_capacity_kwp: number
+    mppt_capacity_a: number
+    rectifier_float_voltage: number
+    baseline_kwh_daily: number
+  }
+  solar_kwh: number
+  grid_kwh: number
+  load_kwh: number
+  solar_contribution_pct: number
+  performance_ratio_pct: number
+  pln_cost_avoided_idr: number
+  carbon_avoided_kg: number
+  trees_equivalent: number
+  power_flow: SpsPowerFlow
+}
+
+export interface SpsPvHealth {
+  health_index: number
+  status: "HEALTHY" | "WARNING" | "DEGRADED"
+  performance_ratio_pct: number
+  string_anomaly: boolean
+  max_string_deviation_pct: number
+  string_currents: number[]
+}
+
+export interface SpsMpptHealth {
+  health_index: number
+  status: "HEALTHY" | "WARNING" | "CRITICAL"
+  efficiency_pct: number
+  is_efficiency_ok: boolean
+  temp_mppt_c: number
+  is_temperature_ok: boolean
+  voltage_delta_v: number | null
+  load_sharing_active: boolean
+}
+
+export interface SpsHealthResponse {
+  tenant_slug: string
+  site_slug: string
+  site_health_index: number
+  status: "HEALTHY" | "WARNING" | "CRITICAL" | "DEGRADED"
+  pv_health: SpsPvHealth
+  mppt_health: SpsMpptHealth
+}
+
+export interface SpsDailyEnergyRecord {
+  date: string
+  solar_kwh: number
+  grid_kwh: number
+  load_kwh: number
+  solar_contribution_pct: number
+  performance_ratio_pct: number
+  updated_at: string
+}
+
+export interface SpsDailyEnergyResponse {
+  tenant_slug: string
+  site_slug: string
+  records: SpsDailyEnergyRecord[]
+  total: number
 }

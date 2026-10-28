@@ -5,6 +5,9 @@ import type {
   DeviceStatusListResponse,
   Site,
   SiteSummary,
+  SpsDailyEnergyResponse,
+  SpsHealthResponse,
+  SpsPerformanceResponse,
   Tenant,
   TelemetryResponse,
   TenantSummary,
@@ -136,4 +139,27 @@ export const analyticsApi = {
 
   getSummarySite: (params: { site_slug: string; tenant_slug?: string; start?: string; end?: string }) =>
     an.get<SiteSummary>("/summary/site", params),
+}
+
+// --- Mitratel SPS On-Grid (GTaaS) ---
+export const spsApi = {
+  getPerformance: (
+    siteSlug: string,
+    params?: { tenant_slug?: string; start?: string; end?: string }
+  ) => an.get<SpsPerformanceResponse>(`/sps/sites/${siteSlug}/performance`, params),
+
+  getHealth: (
+    siteSlug: string,
+    params?: { tenant_slug?: string; start?: string; end?: string }
+  ) => an.get<SpsHealthResponse>(`/sps/sites/${siteSlug}/health`, params),
+
+  getDaily: (
+    siteSlug: string,
+    params?: {
+      tenant_slug?: string
+      start_date?: string
+      end_date?: string
+      limit?: number
+    }
+  ) => an.get<SpsDailyEnergyResponse>(`/api/v1/external/sites/${siteSlug}/daily`, params),
 }

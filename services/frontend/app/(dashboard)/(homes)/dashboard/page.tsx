@@ -7,6 +7,9 @@ import DashboardBreadcrumb from "@/components/layout/dashboard-breadcrumb";
 import TenantSelector from "@/components/shared/tenant-selector";
 import AutoRefreshSelector from "@/components/shared/auto-refresh-selector";
 import LoadingSkeleton from "@/components/loading-skeleton";
+import PowerFlowCard from "@/components/sps/power-flow-card";
+import GtaasSummaryCards from "@/components/sps/gtaas-summary-cards";
+import PmsHardwareStatusCard from "@/components/sps/pms-hardware-status-card";
 import { AutoRefreshProvider } from "@/contexts/AutoRefreshContext";
 import { Suspense } from "react";
 
@@ -21,13 +24,32 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* GTaaS Executive KPI Cards (Solar, Cost Saved PLN, SCR, Carbon ESG) */}
+      <div className="mb-6">
+        <Suspense fallback={<LoadingSkeleton />}>
+          <GtaasSummaryCards />
+        </Suspense>
+      </div>
+
+      {/* Legacy StatCard Row (Kept for 100% backward compatibility) */}
       <Suspense fallback={<LoadingSkeleton />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard />
         </div>
       </Suspense>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
+      {/* Interactive Power Flow & SLD Card */}
+      <div className="mt-6">
+        <Suspense fallback={<LoadingSkeleton />}>
+          <PowerFlowCard />
+        </Suspense>
+      </div>
+
+      {/* Monitoring & Status Section */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
+        <Suspense fallback={<LoadingSkeleton />}>
+          <PmsHardwareStatusCard />
+        </Suspense>
         <Suspense fallback={<LoadingSkeleton />}>
           <DeviceStatusCard />
         </Suspense>
