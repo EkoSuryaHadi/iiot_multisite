@@ -9,7 +9,7 @@ from app.buffer import device_status_buffer, telemetry_buffer
 from app.clickhouse_client import get_client
 from app.mysql_buffer import mysql_telemetry_buffer
 from app.rate_limit import limiter
-from app.routers import devices, ingest, sps_analytics, summary, telemetry
+from app.routers import devices, ingest, open_api, sps_analytics, summary, telemetry
 
 
 @asynccontextmanager
@@ -25,7 +25,12 @@ async def lifespan(app: FastAPI):
         await mysql_telemetry_buffer.stop()
 
 
-app = FastAPI(title="IIOT Analytics API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="IIOT Analytics API",
+    version="0.1.0",
+    lifespan=lifespan,
+    description="IIoT Analytics API and Mitratel Open RESTful API Integration",
+)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -36,6 +41,7 @@ app.include_router(telemetry.router)
 app.include_router(devices.router)
 app.include_router(summary.router)
 app.include_router(sps_analytics.router)
+app.include_router(open_api.router)
 
 
 @app.get("/health", tags=["health"])

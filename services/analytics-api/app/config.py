@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # Rate limit (per klien, lihat app/main.py).
     rate_limit: str = "120/minute"
 
+    # Mitratel External Open REST API (RKS Pasal 2.3.3.c butir 5)
+    mitratel_api_key: str = "mitratel-sps-api-key-secret-2026"
+    mitratel_default_tenant_slug: str = "mitratel"
+
     @property
     def postgres_url(self) -> str:
         return (
