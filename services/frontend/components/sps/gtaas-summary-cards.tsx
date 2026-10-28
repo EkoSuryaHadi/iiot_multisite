@@ -73,7 +73,7 @@ export default function GtaasSummaryCards({ performance }: GtaasSummaryCardsProp
             className={`relative overflow-hidden border ${card.borderColor} bg-white/70 dark:bg-slate-900/70 backdrop-blur shadow-sm`}
           >
             <div
-              className={`absolute inset-0 bg-gradient-to-br ${card.gradient} pointer-events-none`}
+              className={`absolute inset-0 bg-linear-to-br ${card.gradient} pointer-events-none`}
             />
             <CardContent className="p-4 relative">
               <div className="flex items-center justify-between">
@@ -100,3 +100,4 @@ export default function GtaasSummaryCards({ performance }: GtaasSummaryCardsProp
     </div>
   )
 }
+
