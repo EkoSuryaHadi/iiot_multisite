@@ -49,6 +49,17 @@ class Settings(BaseSettings):
     mitratel_api_key: str = "mitratel-sps-api-key-secret-2026"
     mitratel_default_tenant_slug: str = "mitratel"
 
+    # Oneflux Northbound MQTT Bridge (RKS Pasal 2.3.3.c butir 1)
+    oneflux_mqtt_enabled: bool = False
+    oneflux_mqtt_host: str = "mqtt.oneflux.mitratel.co.id"
+    oneflux_mqtt_port: int = 8883
+    oneflux_mqtt_username: str | None = None
+    oneflux_mqtt_password: str | None = None
+    oneflux_mqtt_use_tls: bool = False
+    oneflux_mqtt_client_id: str = "iiot-gtaas-northbound-bridge"
+    oneflux_mqtt_topic_prefix: str = "mitratel/gtaas"
+    oneflux_publish_interval_seconds: float = 300.0
+
     @property
     def postgres_url(self) -> str:
         return (
