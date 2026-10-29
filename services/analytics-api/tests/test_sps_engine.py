@@ -126,3 +126,38 @@ async def test_sps_performance_and_health_endpoints(client, ch_client, tenant_a)
     assert "mppt_health" in health_data
     assert health_data["mppt_health"]["is_efficiency_ok"] is True
     assert health_data["pv_health"]["string_anomaly"] is False
+
+
+async def test_dynamic_clickhouse_sensor_auto_mapping(client, ch_client, tenant_a):
+    now = datetime.now(timezone.utc)
+    rows = [
+        ("acme", "jkt", "EpeverPoC", "Top_PV_Voltage", 142.5, now, ""),
+        ("acme", "jkt", "EpeverPoC", "Top_PV_InputPower", 2400.0, now, ""),
+        ("acme", "jkt", "EpeverPoC", "Top_Battery_Voltage", 54.3, now, ""),
+        ("acme", "jkt", "EpeverPoC", "Top_Batere_SOC", 88.0, now, ""),
+        ("acme", "jkt", "CAN_PoC", "Top_AC_Current", 10.0, now, ""),
+        ("acme", "jkt", "CAN_PoC", "Top_Controller_Temperature", 39.5, now, ""),
+        ("acme", "jkt", "CAN_PoC", "Custom_Ambient_Humidity", 64.2, now, ""),
+    ]
+    ch_client.insert(
+        "telemetry",
+        rows,
+        column_names=["tenant_slug", "site_slug", "device_key", "metric_name", "metric_value", "ts", "raw_payload"],
+    )
+
+    token = make_token(tenant_a.id, "tenant_admin")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    perf_res = await client.get("/api/sps/sites/jkt/performance", headers=headers)
+    assert perf_res.status_code == 200, perf_res.text
+    perf_data = perf_res.json()
+    assert perf_data["site_slug"] == "jkt"
+    assert perf_data["power_flow"]["v_pv"] == 142.5
+    assert perf_data["power_flow"]["p_pv"] == 2400.0
+    assert perf_data["power_flow"]["v_mppt_out"] == 54.3
+    assert perf_data["power_flow"]["temp_mppt"] == 39.5
+    assert perf_data["pms_status"]["battery_pct"] == 88.0
+    metric_names = [m["metric_name"] for m in perf_data["sensor_metrics"]]
+    assert "Custom_Ambient_Humidity" in metric_names
+    assert "Top_PV_Voltage" in metric_names
+

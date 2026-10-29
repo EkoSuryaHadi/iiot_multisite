@@ -6,54 +6,42 @@ import TenantSelector from "@/components/shared/tenant-selector"
 import BillingStatementTable from "@/components/reports/billing-statement-table"
 import { spsApi } from "@/lib/api-client"
 import type { SpsDailyEnergyRecord } from "@/lib/types"
+import { useTenantContext } from "@/contexts/TenantContext"
 import { Card, CardContent } from "@/components/ui/card"
 import { Sparkles, Loader2 } from "lucide-react"
 
 export default function EfficiencySharingPage() {
-  const [siteSlug] = useState("site-jkt-01")
+  const { isSuperadmin, selectedTenantSlug } = useTenantContext()
+  const [resolvedSiteSlug, setResolvedSiteSlug] = useState("auto")
   const [records, setRecords] = useState<SpsDailyEnergyRecord[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (isSuperadmin && !selectedTenantSlug) {
+      setRecords([])
+      setLoading(false)
+      return
+    }
+
     let isMounted = true
+    setLoading(true)
     const fetchDailyData = async () => {
       try {
-        const res = await spsApi.getDaily(siteSlug, { limit: 30 })
-        if (isMounted && res.records && res.records.length > 0) {
-          setRecords(res.records)
+        const res = await spsApi.getDaily("auto", {
+          tenant_slug: isSuperadmin ? selectedTenantSlug : undefined,
+          limit: 31,
+        })
+        if (isMounted) {
+          if (res.site_slug) setResolvedSiteSlug(res.site_slug)
+          setRecords(res.records || [])
           setLoading(false)
           return
         }
       } catch {
-        // Fallback demo data jika backend/site belum ada data historis 30 hari
-      }
-
-      // Generate 14-day sample reconciliation data
-      if (isMounted) {
-        const demo: SpsDailyEnergyRecord[] = []
-        const now = new Date()
-        for (let i = 0; i < 14; i++) {
-          const d = new Date(now)
-          d.setDate(d.getDate() - i)
-          const dateStr = d.toISOString().split("T")[0]
-          const solar = Number((14.5 + Math.random() * 5.0).toFixed(2))
-          const grid = Number((4.0 + Math.random() * 2.5).toFixed(2))
-          const load = Number((solar + grid).toFixed(2))
-          const scr = Number(((solar / load) * 100).toFixed(2))
-          const pr = Number((78.0 + Math.random() * 6.0).toFixed(2))
-
-          demo.push({
-            date: dateStr,
-            solar_kwh: solar,
-            grid_kwh: grid,
-            load_kwh: load,
-            solar_contribution_pct: scr,
-            performance_ratio_pct: pr,
-            updated_at: new Date().toISOString(),
-          })
+        if (isMounted) {
+          setRecords([])
+          setLoading(false)
         }
-        setRecords(demo)
-        setLoading(false)
       }
     }
 
@@ -61,7 +49,7 @@ export default function EfficiencySharingPage() {
     return () => {
       isMounted = false
     }
-  }, [siteSlug])
+  }, [isSuperadmin, selectedTenantSlug])
 
   return (
     <div className="space-y-6">
@@ -93,7 +81,7 @@ export default function EfficiencySharingPage() {
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-300">
             <span className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700">
-              Site: <strong className="text-emerald-400">{siteSlug}</strong>
+              Site: <strong className="text-emerald-400">{resolvedSiteSlug === "auto" ? "-" : resolvedSiteSlug}</strong>
             </span>
             <span className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700">
               Retensi: <strong className="text-sky-400">24 Bulan</strong>
@@ -104,7 +92,7 @@ export default function EfficiencySharingPage() {
 
       {/* Statement Table */}
       <BillingStatementTable
-        siteSlug={siteSlug}
+        siteSlug={resolvedSiteSlug === "auto" ? "-" : resolvedSiteSlug}
         records={records}
         sharingRatioPct={50.0}
         plnTariffIdr={1444.70}
@@ -112,4 +100,3 @@ export default function EfficiencySharingPage() {
     </div>
   )
 }
-

@@ -1,31 +1,79 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Battery, BatteryCharging, Wifi, ArrowUpCircle, ShieldCheck, HardDrive } from "lucide-react"
+import type { SpsPerformanceResponse } from "@/lib/types"
+import { useTenantContext } from "@/contexts/TenantContext"
+import { useAutoRefresh } from "@/contexts/AutoRefreshContext"
+import { spsApi } from "@/lib/api-client"
 
 interface PmsHardwareStatusProps {
   siteSlug?: string
-  powerSource?: "DC_MAINS" | "INTERNAL_UPS"
+  performance?: SpsPerformanceResponse | null
+  powerSource?: "DC_MAINS" | "INTERNAL_UPS" | "OFFLINE"
   batteryVoltage?: number
   batteryPct?: number
   upsHoursRemaining?: number
-  signalRssi?: number
+  signalRssi?: number | null
   firmwareVersion?: string
   otaStatus?: "UP_TO_DATE" | "UPDATE_AVAILABLE" | "UPDATING"
 }
 
 export default function PmsHardwareStatusCard({
-  siteSlug = "site-jkt-01",
-  powerSource = "DC_MAINS",
-  batteryVoltage = 12.6,
-  batteryPct = 95,
-  upsHoursRemaining = 3.2,
-  signalRssi = -68,
-  firmwareVersion = "v2.4.1-ota-build-2026",
-  otaStatus = "UP_TO_DATE",
+  siteSlug = "auto",
+  performance: externalPerformance,
+  powerSource: propPowerSource,
+  batteryVoltage: propBatteryVoltage,
+  batteryPct: propBatteryPct,
+  upsHoursRemaining: propUpsHours,
+  signalRssi: propSignalRssi,
+  firmwareVersion: propFwVersion,
+  otaStatus: propOtaStatus,
 }: PmsHardwareStatusProps) {
-  const isMainsActive = powerSource === "DC_MAINS"
+  const { isSuperadmin, selectedTenantSlug } = useTenantContext()
+  const { refreshTrigger } = useAutoRefresh()
+  const [internalPerf, setInternalPerf] = useState<SpsPerformanceResponse | null>(null)
+
+  useEffect(() => {
+    if (externalPerformance !== undefined) return
+    if (isSuperadmin && !selectedTenantSlug) {
+      setInternalPerf(null)
+      return
+    }
+
+    let isMounted = true
+    spsApi
+      .getPerformance(siteSlug, {
+        tenant_slug: isSuperadmin ? selectedTenantSlug : undefined,
+      })
+      .then((res) => {
+        if (isMounted) setInternalPerf(res)
+      })
+      .catch(() => {
+        if (isMounted) setInternalPerf(null)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [externalPerformance, siteSlug, isSuperadmin, selectedTenantSlug, refreshTrigger])
+
+  const data = externalPerformance ?? internalPerf
+  const pms = data?.pms_status
+  const isOnline = data?.is_online ?? false
+  const resolvedSite = data?.site_slug || (siteSlug === "auto" ? "-" : siteSlug)
+
+  const powerSource = propPowerSource ?? pms?.power_source ?? (isOnline ? "DC_MAINS" : "OFFLINE")
+  const batteryVoltage = propBatteryVoltage ?? pms?.battery_voltage ?? 0
+  const batteryPct = propBatteryPct ?? pms?.battery_pct ?? 0
+  const upsHoursRemaining = propUpsHours ?? pms?.ups_hours_remaining ?? 0
+  const signalRssi = propSignalRssi !== undefined ? propSignalRssi : pms?.signal_rssi
+  const firmwareVersion = propFwVersion ?? pms?.firmware_version ?? "v2.4.1-ota-build-2026"
+  const otaStatus = propOtaStatus ?? pms?.ota_status ?? "UP_TO_DATE"
+
+  const isMainsActive = powerSource === "DC_MAINS" && isOnline
   const isUpsHealthy = upsHoursRemaining >= 3.0
 
   return (
@@ -39,18 +87,24 @@ export default function PmsHardwareStatusCard({
             </CardTitle>
           </div>
           <CardDescription className="text-xs">
-            Site: {siteSlug} | Catu Daya Cadangan 3 Jam & Remote OTA
+            Site: <span className="font-semibold">{resolvedSite}</span> | Catu Daya Cadangan 3 Jam & Remote OTA
           </CardDescription>
         </div>
         <Badge
           variant="outline"
           className={
-            isMainsActive
-              ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30"
-              : "border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 animate-pulse"
+            !isOnline
+              ? "border-slate-400 text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/50"
+              : isMainsActive
+                ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30"
+                : "border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 animate-pulse"
           }
         >
-          {isMainsActive ? "DC −48V Normal" : "Mode Baterai UPS Cadangan"}
+          {!isOnline
+            ? "Logger Offline"
+            : isMainsActive
+              ? "DC −48V Normal"
+              : "Mode Baterai UPS Cadangan"}
         </Badge>
       </CardHeader>
 
@@ -65,18 +119,18 @@ export default function PmsHardwareStatusCard({
                 <Battery className="h-4 w-4 text-amber-500" />
               )}
               <span className="font-semibold text-slate-800 dark:text-slate-200">
-                UPS Internal Logger
+                UPS Internal Logger / Baterai
               </span>
             </div>
             <span className="font-mono text-xs text-slate-500">
-              {batteryVoltage.toFixed(1)} V ({batteryPct}%)
+              {batteryVoltage.toFixed(1)} V ({batteryPct.toFixed(0)}%)
             </span>
           </div>
 
           <div className="mt-2 flex items-center justify-between">
             <span className="text-slate-500">Daya Tahan Saat Blackout:</span>
-            <span className={`font-bold ${isUpsHealthy ? "text-emerald-600 dark:text-emerald-400" : "text-amber-500"}`}>
-              {upsHoursRemaining.toFixed(1)} Jam (Min. 3 Jam)
+            <span className={`font-bold ${isUpsHealthy ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500"}`}>
+              {upsHoursRemaining.toFixed(1)} Jam (Target Min. 3 Jam)
             </span>
           </div>
 
@@ -98,9 +152,11 @@ export default function PmsHardwareStatusCard({
               <span className="font-medium text-[11px]">Koneksi 4G / LTE</span>
             </div>
             <div className="font-semibold text-slate-800 dark:text-slate-200">
-              {signalRssi} dBm (Bagus)
+              {signalRssi ? `${signalRssi} dBm` : isOnline ? "Terhubung" : "Tidak Ada Sinyal"}
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">SIM Unlocked</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">
+              {isOnline ? "SIM Unlocked (Online)" : "Store & Forward Buffer Aktif"}
+            </div>
           </div>
 
           {/* Remote OTA */}
@@ -122,4 +178,3 @@ export default function PmsHardwareStatusCard({
     </Card>
   )
 }
-

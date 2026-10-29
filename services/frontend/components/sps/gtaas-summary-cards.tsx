@@ -1,30 +1,71 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Sun, DollarSign, PieChart, Leaf, TrendingUp } from "lucide-react"
 import type { SpsPerformanceResponse } from "@/lib/types"
+import { useTenantContext } from "@/contexts/TenantContext"
+import { useAutoRefresh } from "@/contexts/AutoRefreshContext"
+import { spsApi } from "@/lib/api-client"
 
 interface GtaasSummaryCardsProps {
   performance?: SpsPerformanceResponse | null
+  siteSlug?: string
 }
 
-export default function GtaasSummaryCards({ performance }: GtaasSummaryCardsProps) {
-  const p = performance || {
-    solar_kwh: 16.8,
-    grid_kwh: 4.5,
-    load_kwh: 21.3,
-    solar_contribution_pct: 78.87,
-    performance_ratio_pct: 82.4,
-    pln_cost_avoided_idr: 24270,
-    carbon_avoided_kg: 14.28,
-    trees_equivalent: 0.71,
+export default function GtaasSummaryCards({
+  performance: externalPerformance,
+  siteSlug = "auto",
+}: GtaasSummaryCardsProps) {
+  const { isSuperadmin, selectedTenantSlug } = useTenantContext()
+  const { refreshTrigger } = useAutoRefresh()
+  const [internalPerf, setInternalPerf] = useState<SpsPerformanceResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (externalPerformance !== undefined) return
+    if (isSuperadmin && !selectedTenantSlug) {
+      setInternalPerf(null)
+      return
+    }
+
+    let isMounted = true
+    setLoading(true)
+    spsApi
+      .getPerformance(siteSlug, {
+        tenant_slug: isSuperadmin ? selectedTenantSlug : undefined,
+      })
+      .then((res) => {
+        if (isMounted) setInternalPerf(res)
+      })
+      .catch(() => {
+        if (isMounted) setInternalPerf(null)
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [externalPerformance, siteSlug, isSuperadmin, selectedTenantSlug, refreshTrigger])
+
+  const p = externalPerformance ?? internalPerf ?? {
+    solar_kwh: 0,
+    grid_kwh: 0,
+    load_kwh: 0,
+    solar_contribution_pct: 0,
+    performance_ratio_pct: 0,
+    pln_cost_avoided_idr: 0,
+    carbon_avoided_kg: 0,
+    trees_equivalent: 0,
   }
 
   const cards = [
     {
       title: "Solar Energy Generated",
-      value: `${p.solar_kwh.toFixed(1)} kWh`,
-      subtitle: `Hari ini (Total beban: ${p.load_kwh.toFixed(1)} kWh)`,
+      value: loading ? "..." : `${p.solar_kwh.toFixed(2)} kWh`,
+      subtitle: `24 Jam Terakhir (Total beban: ${p.load_kwh.toFixed(2)} kWh)`,
       icon: Sun,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
@@ -33,7 +74,7 @@ export default function GtaasSummaryCards({ performance }: GtaasSummaryCardsProp
     },
     {
       title: "PLN Cost Avoided",
-      value: `Rp ${(p.pln_cost_avoided_idr || 0).toLocaleString("id-ID")}`,
+      value: loading ? "..." : `Rp ${Math.round(p.pln_cost_avoided_idr || 0).toLocaleString("id-ID")}`,
       subtitle: `Tarif PLN B3/I3 (Rp 1.444,70 / kWh)`,
       icon: DollarSign,
       color: "text-emerald-500",
@@ -43,7 +84,7 @@ export default function GtaasSummaryCards({ performance }: GtaasSummaryCardsProp
     },
     {
       title: "Solar Contribution Ratio",
-      value: `${p.solar_contribution_pct.toFixed(1)}%`,
+      value: loading ? "..." : `${p.solar_contribution_pct.toFixed(1)}%`,
       subtitle: `Performance Ratio: ${p.performance_ratio_pct.toFixed(1)}%`,
       icon: PieChart,
       color: "text-sky-500",
@@ -53,8 +94,8 @@ export default function GtaasSummaryCards({ performance }: GtaasSummaryCardsProp
     },
     {
       title: "ESG Carbon Avoidance",
-      value: `${p.carbon_avoided_kg.toFixed(1)} kg CO₂e`,
-      subtitle: `Setara menanam ~${p.trees_equivalent.toFixed(1)} pohon`,
+      value: loading ? "..." : `${p.carbon_avoided_kg.toFixed(2)} kg CO₂e`,
+      subtitle: `Setara menanam ~${p.trees_equivalent.toFixed(2)} pohon`,
       icon: Leaf,
       color: "text-teal-500",
       bgColor: "bg-teal-500/10",
@@ -98,7 +139,5 @@ export default function GtaasSummaryCards({ performance }: GtaasSummaryCardsProp
         )
       })}
     </div>
-    
   )
 }
-

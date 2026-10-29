@@ -144,11 +144,33 @@ export interface SpsPowerFlow {
   load_sharing_active: boolean
 }
 
+export interface SpsSensorMetric {
+  metric_name: string
+  latest_value: number
+  avg_value: number
+  max_value?: number
+  last_seen?: string | null
+  device_key?: string
+}
+
+export interface SpsPmsStatus {
+  power_source: "DC_MAINS" | "INTERNAL_UPS" | "OFFLINE"
+  battery_voltage: number
+  battery_pct: number
+  ups_hours_remaining: number
+  signal_rssi?: number | null
+  firmware_version: string
+  ota_status: "UP_TO_DATE" | "UPDATE_AVAILABLE" | "UPDATING"
+}
+
 export interface SpsPerformanceResponse {
   tenant_slug: string
   site_slug: string
+  is_online?: boolean
+  last_seen?: string | null
   site_config: {
     site_type: string
+    site_name?: string
     pv_capacity_kwp: number
     mppt_capacity_a: number
     rectifier_float_voltage: number
@@ -163,6 +185,8 @@ export interface SpsPerformanceResponse {
   carbon_avoided_kg: number
   trees_equivalent: number
   power_flow: SpsPowerFlow
+  pms_status?: SpsPmsStatus
+  sensor_metrics?: SpsSensorMetric[]
 }
 
 export interface SpsPvHealth {

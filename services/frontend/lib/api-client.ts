@@ -161,5 +161,5 @@ export const spsApi = {
       end_date?: string
       limit?: number
     }
-  ) => an.get<SpsDailyEnergyResponse>(`/api/v1/external/sites/${siteSlug}/daily`, params),
+  ) => an.get<SpsDailyEnergyResponse>(`/sps/sites/${siteSlug}/daily`, params),
 }
