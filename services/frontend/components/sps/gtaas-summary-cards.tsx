@@ -50,22 +50,20 @@ export default function GtaasSummaryCards({
     }
   }, [externalPerformance, siteSlug, isSuperadmin, selectedTenantSlug, refreshTrigger])
 
-  const p = externalPerformance ?? internalPerf ?? {
-    solar_kwh: 0,
-    grid_kwh: 0,
-    load_kwh: 0,
-    solar_contribution_pct: 0,
-    performance_ratio_pct: 0,
-    pln_cost_avoided_idr: 0,
-    carbon_avoided_kg: 0,
-    trees_equivalent: 0,
-  }
+  const p = externalPerformance ?? internalPerf
+  const solarKwh = Number(p?.solar_kwh ?? 0)
+  const loadKwh = Number(p?.load_kwh ?? 0)
+  const costAvoidedIdr = Number(p?.pln_cost_avoided_idr ?? 0)
+  const scrPct = Number(p?.solar_contribution_pct ?? 0)
+  const prPct = Number(p?.performance_ratio_pct ?? 0)
+  const carbonKg = Number(p?.carbon_avoided_kg ?? 0)
+  const treesEq = Number(p?.trees_equivalent ?? 0)
 
   const cards = [
     {
       title: "Solar Energy Generated",
-      value: loading ? "..." : `${p.solar_kwh.toFixed(2)} kWh`,
-      subtitle: `24 Jam Terakhir (Total beban: ${p.load_kwh.toFixed(2)} kWh)`,
+      value: loading ? "..." : `${solarKwh.toFixed(2)} kWh`,
+      subtitle: `24 Jam Terakhir (Total beban: ${loadKwh.toFixed(2)} kWh)`,
       icon: Sun,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
@@ -74,7 +72,7 @@ export default function GtaasSummaryCards({
     },
     {
       title: "PLN Cost Avoided",
-      value: loading ? "..." : `Rp ${Math.round(p.pln_cost_avoided_idr || 0).toLocaleString("id-ID")}`,
+      value: loading ? "..." : `Rp ${Math.round(costAvoidedIdr).toLocaleString("id-ID")}`,
       subtitle: `Tarif PLN B3/I3 (Rp 1.444,70 / kWh)`,
       icon: DollarSign,
       color: "text-emerald-500",
@@ -84,8 +82,8 @@ export default function GtaasSummaryCards({
     },
     {
       title: "Solar Contribution Ratio",
-      value: loading ? "..." : `${p.solar_contribution_pct.toFixed(1)}%`,
-      subtitle: `Performance Ratio: ${p.performance_ratio_pct.toFixed(1)}%`,
+      value: loading ? "..." : `${scrPct.toFixed(1)}%`,
+      subtitle: `Performance Ratio: ${prPct.toFixed(1)}%`,
       icon: PieChart,
       color: "text-sky-500",
       bgColor: "bg-sky-500/10",
@@ -94,8 +92,8 @@ export default function GtaasSummaryCards({
     },
     {
       title: "ESG Carbon Avoidance",
-      value: loading ? "..." : `${p.carbon_avoided_kg.toFixed(2)} kg CO₂e`,
-      subtitle: `Setara menanam ~${p.trees_equivalent.toFixed(2)} pohon`,
+      value: loading ? "..." : `${carbonKg.toFixed(2)} kg CO₂e`,
+      subtitle: `Setara menanam ~${treesEq.toFixed(2)} pohon`,
       icon: Leaf,
       color: "text-teal-500",
       bgColor: "bg-teal-500/10",

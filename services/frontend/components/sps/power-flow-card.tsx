@@ -111,7 +111,7 @@ export default function PowerFlowCard({
               {!isOnline
                 ? "Offline (Snapshot Terakhir)"
                 : pf?.load_sharing_active
-                  ? `Load Sharing Aktif (ΔV +${pf.voltage_delta_v.toFixed(1)}V)`
+                  ? `Load Sharing Aktif (ΔV +${Number(pf?.voltage_delta_v ?? 0).toFixed(1)}V)`
                   : "Online Standby"}
             </Badge>
 

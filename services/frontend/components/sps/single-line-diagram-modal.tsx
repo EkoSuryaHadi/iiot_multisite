@@ -20,22 +20,22 @@ export default function SingleLineDiagramModal({
   siteType = "TYPE_A",
   powerFlow,
 }: SingleLineDiagramModalProps) {
-  const pf = powerFlow || {
-    irradiance: 850,
-    v_pv: 185.4,
-    i_pv: 16.2,
-    p_pv: 3003.5,
-    v_mppt_out: 54.2,
-    i_mppt_out: 53.0,
-    p_mppt_out: 2872.6,
-    v_busbar: 53.8,
-    i_rectifier: 12.0,
-    p_rectifier: 645.6,
-    p_load: 3518.2,
-    temp_mppt: 42.5,
-    rectifier_float_voltage: 53.5,
-    voltage_delta_v: 0.7,
-    load_sharing_active: true,
+  const pf = {
+    irradiance: Number(powerFlow?.irradiance ?? 0),
+    v_pv: Number(powerFlow?.v_pv ?? 0),
+    i_pv: Number(powerFlow?.i_pv ?? 0),
+    p_pv: Number(powerFlow?.p_pv ?? 0),
+    v_mppt_out: Number(powerFlow?.v_mppt_out ?? 0),
+    i_mppt_out: Number(powerFlow?.i_mppt_out ?? 0),
+    p_mppt_out: Number(powerFlow?.p_mppt_out ?? 0),
+    v_busbar: Number(powerFlow?.v_busbar ?? 53.5),
+    i_rectifier: Number(powerFlow?.i_rectifier ?? 0),
+    p_rectifier: Number(powerFlow?.p_rectifier ?? 0),
+    p_load: Number(powerFlow?.p_load ?? 0),
+    temp_mppt: Number(powerFlow?.temp_mppt ?? 0),
+    rectifier_float_voltage: Number(powerFlow?.rectifier_float_voltage ?? 53.5),
+    voltage_delta_v: Number(powerFlow?.voltage_delta_v ?? 0),
+    load_sharing_active: Boolean(powerFlow?.load_sharing_active),
   }
 
   return (
@@ -53,7 +53,14 @@ export default function SingleLineDiagramModal({
                 <span className="text-emerald-400 font-semibold">{siteType}</span> | Standar RKS Mitratel (−48 VDC)
               </DialogDescription>
             </div>
-            <Badge variant="outline" className={pf.load_sharing_active ? "border-emerald-500 text-emerald-400 bg-emerald-950/40" : "border-amber-500 text-amber-400"}>
+            <Badge
+              variant="outline"
+              className={
+                pf.load_sharing_active
+                  ? "border-emerald-500 text-emerald-400 bg-emerald-950/40"
+                  : "border-amber-500 text-amber-400"
+              }
+            >
               {pf.load_sharing_active ? "Load Sharing Aktif (ΔV +0.5V s/d +1.0V)" : "Load Sharing Idle"}
             </Badge>
           </div>
@@ -75,9 +82,15 @@ export default function SingleLineDiagramModal({
 
             {/* PV Array Block */}
             <rect x="40" y="40" width="140" height="90" rx="8" fill="#1e293b" stroke="#f59e0b" strokeWidth="2" />
-            <text x="110" y="70" fill="#fcd34d" fontSize="13" fontWeight="bold" textAnchor="middle">PV ARRAY</text>
-            <text x="110" y="90" fill="#94a3b8" fontSize="11" textAnchor="middle">{pf.p_pv.toFixed(0)} W | {pf.v_pv.toFixed(1)} V</text>
-            <text x="110" y="110" fill="#64748b" fontSize="10" textAnchor="middle">I: {pf.i_pv.toFixed(1)} A</text>
+            <text x="110" y="70" fill="#fcd34d" fontSize="13" fontWeight="bold" textAnchor="middle">
+              PV ARRAY
+            </text>
+            <text x="110" y="90" fill="#94a3b8" fontSize="11" textAnchor="middle">
+              {pf.p_pv.toFixed(0)} W | {pf.v_pv.toFixed(1)} V
+            </text>
+            <text x="110" y="110" fill="#64748b" fontSize="10" textAnchor="middle">
+              I: {pf.i_pv.toFixed(1)} A
+            </text>
 
             {/* Line PV -> MPPT */}
             <path d="M 180 85 L 260 85" stroke="#f59e0b" strokeWidth="3" strokeDasharray="6 3" />
@@ -85,9 +98,15 @@ export default function SingleLineDiagramModal({
 
             {/* MPPT Controller Block */}
             <rect x="270" y="40" width="150" height="90" rx="8" fill="#1e293b" stroke="#10b981" strokeWidth="2" />
-            <text x="345" y="70" fill="#6ee7b7" fontSize="13" fontWeight="bold" textAnchor="middle">MPPT CONTROLLER</text>
-            <text x="345" y="90" fill="#94a3b8" fontSize="11" textAnchor="middle">{pf.p_mppt_out.toFixed(0)} W | {pf.v_mppt_out.toFixed(1)} V</text>
-            <text x="345" y="110" fill="#34d399" fontSize="10" textAnchor="middle">Output: {pf.i_mppt_out.toFixed(1)} A</text>
+            <text x="345" y="70" fill="#6ee7b7" fontSize="13" fontWeight="bold" textAnchor="middle">
+              MPPT CONTROLLER
+            </text>
+            <text x="345" y="90" fill="#94a3b8" fontSize="11" textAnchor="middle">
+              {pf.p_mppt_out.toFixed(0)} W | {pf.v_mppt_out.toFixed(1)} V
+            </text>
+            <text x="345" y="110" fill="#34d399" fontSize="10" textAnchor="middle">
+              Output: {pf.i_mppt_out.toFixed(1)} A
+            </text>
 
             {/* Line MPPT -> DC Busbar */}
             <path d="M 420 85 L 490 85" stroke="#10b981" strokeWidth="3" />
@@ -95,9 +114,15 @@ export default function SingleLineDiagramModal({
 
             {/* Rectifier PLN Block */}
             <rect x="270" y="180" width="150" height="90" rx="8" fill="#1e293b" stroke="#38bdf8" strokeWidth="2" />
-            <text x="345" y="210" fill="#7dd3fc" fontSize="13" fontWeight="bold" textAnchor="middle">RECTIFIER PLN</text>
-            <text x="345" y="230" fill="#94a3b8" fontSize="11" textAnchor="middle">Float: {pf.rectifier_float_voltage.toFixed(1)} V</text>
-            <text x="345" y="250" fill="#38bdf8" fontSize="10" textAnchor="middle">{pf.p_rectifier.toFixed(0)} W | {pf.i_rectifier.toFixed(1)} A</text>
+            <text x="345" y="210" fill="#7dd3fc" fontSize="13" fontWeight="bold" textAnchor="middle">
+              RECTIFIER PLN
+            </text>
+            <text x="345" y="230" fill="#94a3b8" fontSize="11" textAnchor="middle">
+              Float: {pf.rectifier_float_voltage.toFixed(1)} V
+            </text>
+            <text x="345" y="250" fill="#38bdf8" fontSize="10" textAnchor="middle">
+              {pf.p_rectifier.toFixed(0)} W | {pf.i_rectifier.toFixed(1)} A
+            </text>
 
             {/* Line Rectifier -> DC Busbar */}
             <path d="M 420 225 L 500 225" stroke="#38bdf8" strokeWidth="3" />
@@ -105,8 +130,12 @@ export default function SingleLineDiagramModal({
 
             {/* DC Busbar (-48 VDC) - Heavy Vertical Bar */}
             <rect x="500" y="30" width="16" height="250" rx="4" fill="url(#busbarGrad)" stroke="#34d399" strokeWidth="1" />
-            <text x="508" y="295" fill="#a7f3d0" fontSize="10" fontWeight="bold" textAnchor="middle">DC BUSBAR</text>
-            <text x="508" y="310" fill="#6ee7b7" fontSize="9" textAnchor="middle">−48 VDC</text>
+            <text x="508" y="295" fill="#a7f3d0" fontSize="10" fontWeight="bold" textAnchor="middle">
+              DC BUSBAR
+            </text>
+            <text x="508" y="310" fill="#6ee7b7" fontSize="9" textAnchor="middle">
+              −48 VDC
+            </text>
 
             {/* Line Busbar -> BTS Load */}
             <path d="M 516 155 L 610 155" stroke="#a855f7" strokeWidth="4" />
@@ -114,9 +143,15 @@ export default function SingleLineDiagramModal({
 
             {/* Tenant Load Block */}
             <rect x="622" y="110" width="150" height="90" rx="8" fill="#1e293b" stroke="#c084fc" strokeWidth="2" />
-            <text x="697" y="140" fill="#e9d5ff" fontSize="13" fontWeight="bold" textAnchor="middle">BEBAN TENANT BTS</text>
-            <text x="697" y="160" fill="#94a3b8" fontSize="11" textAnchor="middle">Total: {pf.p_load.toFixed(0)} W</text>
-            <text x="697" y="180" fill="#c084fc" fontSize="10" textAnchor="middle">Menara 4G / 5G</text>
+            <text x="697" y="140" fill="#e9d5ff" fontSize="13" fontWeight="bold" textAnchor="middle">
+              BEBAN TENANT BTS
+            </text>
+            <text x="697" y="160" fill="#94a3b8" fontSize="11" textAnchor="middle">
+              Total: {pf.p_load.toFixed(0)} W
+            </text>
+            <text x="697" y="180" fill="#c084fc" fontSize="10" textAnchor="middle">
+              Menara 4G / 5G
+            </text>
           </svg>
         </div>
 
@@ -145,4 +180,3 @@ export default function SingleLineDiagramModal({
     </Dialog>
   )
 }
-

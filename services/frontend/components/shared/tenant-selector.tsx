@@ -18,7 +18,7 @@ export default function TenantSelector() {
 
   return (
     <Select
-      value={selectedTenant?.id}
+      value={selectedTenant?.id ?? ""}
       onValueChange={setSelectedTenantId}
       disabled={tenantsLoading || tenants.length === 0}
     >

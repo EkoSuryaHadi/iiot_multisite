@@ -164,8 +164,13 @@ def calculate_financial_and_esg_metrics(
 ) -> dict[str, float]:
     """Menghitung penghematan kWh PLN, estimasi biaya (Rp), dan reduksi emisi karbon (kg CO2e)."""
     clean_kwh = max(0.0, float(solar_kwh))
+    cost_saved = round(clean_kwh * tariff_idr_per_kwh, 2)
+    co2_avoided = round(clean_kwh * grid_emission_factor_kg_per_kwh, 3)
     return {
         "pln_kwh_saved": round(clean_kwh, 3),
-        "cost_saved_idr": round(clean_kwh * tariff_idr_per_kwh, 2),
-        "co2_avoided_kg": round(clean_kwh * grid_emission_factor_kg_per_kwh, 3),
+        "cost_saved_idr": cost_saved,
+        "pln_cost_avoided_idr": cost_saved,
+        "co2_avoided_kg": co2_avoided,
+        "carbon_avoided_kg": co2_avoided,
+        "trees_equivalent": round(co2_avoided / 20.0, 2),
     }

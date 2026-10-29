@@ -18,15 +18,18 @@ interface TenantContextValue {
 const TenantContext = createContext<TenantContextValue | undefined>(undefined)
 
 export function TenantProvider({ children }: { children: ReactNode }) {
-  const { data: session } = useSession()
-  const isSuperadmin = session?.user?.role === "superadmin"
+  const { data: session, status } = useSession()
+  const isSessionLoading = status === "loading"
+  const isRealSuperadmin = session?.user?.role === "superadmin"
+  // Saat session masih loading, tahan komponen agar tidak menembak API tanpa tenant_slug
+  const isSuperadmin = isSessionLoading ? true : isRealSuperadmin
 
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [tenantsLoading, setTenantsLoading] = useState(false)
   const [selectedTenantId, setSelectedTenantId] = useState<string | undefined>(undefined)
 
   const refreshTenants = async () => {
-    if (!isSuperadmin) return
+    if (!isRealSuperadmin) return
     setTenantsLoading(true)
     try {
       const list = await tenantsApi.list()
@@ -38,11 +41,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    if (isSuperadmin) {
+    if (isRealSuperadmin) {
       refreshTenants()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSuperadmin])
+  }, [isRealSuperadmin])
 
   const selectedTenant = tenants.find((t) => t.id === selectedTenantId) ?? null
 
@@ -51,7 +54,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       value={{
         isSuperadmin,
         tenants,
-        tenantsLoading,
+        tenantsLoading: isSessionLoading || tenantsLoading,
         selectedTenant,
         selectedTenantSlug: selectedTenant?.slug,
         setSelectedTenantId,
