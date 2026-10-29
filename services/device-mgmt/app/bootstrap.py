@@ -10,7 +10,6 @@ from sqlalchemy import select
 
 from app.database import SessionLocal
 from app.models import Role, User
-from app.mysql_sync import sync_mysql_user
 from app.security import hash_secret
 
 
@@ -33,10 +32,6 @@ def main() -> None:
             db.add(user)
             db.commit()
             print(f"Superadmin '{email}' berhasil dibuat di Postgres.")
-
-        # Selalu sinkronkan superadmin ke MySQL
-        sync_mysql_user(email, password)
-        print(f"Superadmin '{email}' disinkronkan ke MySQL.")
     finally:
         db.close()
 

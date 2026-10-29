@@ -20,7 +20,6 @@ Hanya port berikut yang perlu dibuka ke publik di VPS:
 - `22/tcp` (SSH)
 - `80/tcp` & `443/tcp` & `443/udp` (HTTP/HTTPS Caddy untuk Dashboard Web)
 - `1883/tcp` (dan/atau `8883/tcp` untuk koneksi MQTT Gateway/Device)
-- `3306/tcp` (Akses langsung Remote Database MySQL untuk Klien)
 
 ```bash
 sudo ufw default deny incoming
@@ -30,11 +29,10 @@ sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw allow 443/udp
 sudo ufw allow 1883/tcp
-sudo ufw allow 3306/tcp comment "MySQL Remote Access for Client"
 sudo ufw enable
 ```
 
-> **Catatan Keamanan Docker**: Di `docker-compose.prod.yml`, database internal (`postgres`, `clickhouse`) serta API internal (`device-mgmt`, `auth-webhook`, `analytics-api`) **tidak mempublikasikan port ke host (`0.0.0.0`)**, melainkan hanya berkomunikasi di dalam jaringan internal `iiot-net`. Port `3306` dipublikasikan khusus untuk akses klien terautentikasi (`andreas.nugroho@gaungnusa.com`). Dashboard EMQX (`18083`) hanya di-bind ke `127.0.0.1:18083`.
+> **Catatan Keamanan Docker**: Di `docker-compose.prod.yml`, database internal (`postgres`, `clickhouse`) serta API internal (`device-mgmt`, `auth-webhook`, `analytics-api`) **tidak mempublikasikan port ke host (`0.0.0.0`)**, melainkan hanya berkomunikasi di dalam jaringan internal `iiot-net`. Dashboard EMQX (`18083`) hanya di-bind ke `127.0.0.1:18083`.
 
 ---
 

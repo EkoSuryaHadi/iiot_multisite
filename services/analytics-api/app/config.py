@@ -16,14 +16,6 @@ class Settings(BaseSettings):
     ingest_secret: str = "change_me_ingest_secret"
     ingest_max_buffered_rows: int = 100_000
 
-    # MySQL Client Sync (Port 3306)
-    mysql_host: str = "mysql"
-    mysql_port: int = 3306
-    mysql_db: str = "iiot"
-    mysql_user: str = "andreas.nugroho@gaungnusa.com"
-    mysql_password: str = "Password123456"
-    mysql_enabled: bool = True
-
     # Postgres (read-only) - dipakai untuk resolusi tenant_id (JWT) -> tenant_slug (ClickHouse).
     postgres_host: str = "postgres"
     postgres_port: int = 5432

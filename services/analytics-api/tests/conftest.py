@@ -135,6 +135,57 @@ class _InMemoryClickHouseClient:
     def query(self, query_str: str, parameters: dict[str, Any] | None = None) -> _FakeQueryResult:
         params = parameters or {}
         q_upper = " ".join(query_str.upper().split())
+
+        if "SELECT NOW()" in q_upper:
+            return _FakeQueryResult([(datetime.now(timezone.utc),)])
+
+        if "FROM DEVICE_LAST_SEEN" in q_upper:
+            seen: dict[tuple[str, str, str], tuple[str, datetime]] = {}
+            for r in self.data.get("telemetry", []):
+                t_slug, s_slug, d_key, ts_val = r[0], r[1], r[2], r[5]
+                if "tenant_slug" in params and t_slug != params["tenant_slug"]:
+                    continue
+                if "site_slug" in params and s_slug != params["site_slug"]:
+                    continue
+                k = (t_slug, s_slug, d_key)
+                if k not in seen or ts_val > seen[k][1]:
+                    seen[k] = ("online", ts_val)
+            for r in self.data.get("device_status", []):
+                t_slug, s_slug, d_key, status_val, ts_val = r[0], r[1], r[2], r[3], r[4]
+                if "tenant_slug" in params and t_slug != params["tenant_slug"]:
+                    continue
+                if "site_slug" in params and s_slug != params["site_slug"]:
+                    continue
+                k = (t_slug, s_slug, d_key)
+                if k not in seen or ts_val > seen[k][1]:
+                    seen[k] = (status_val, ts_val)
+            if "SELECT DEVICE_KEY, STATUS, LAST_SEEN" in q_upper:
+                out = [(k[2], v[0], v[1]) for k, v in sorted(seen.items())]
+            else:
+                out = [(k[0], k[1], k[2], v[0], v[1]) for k, v in sorted(seen.items())]
+            return _FakeQueryResult(out)
+
+        if "FROM DEVICE_STATUS" in q_upper:
+            st_rows = self.data.get("device_status", [])
+            out = []
+            for r in st_rows:
+                t_slug, s_slug, d_key = r[0], r[1], r[2]
+                if "tenant_slug" in params and t_slug != params["tenant_slug"]:
+                    continue
+                if "site_slug" in params and s_slug != params["site_slug"]:
+                    continue
+                if "device_key" in params and d_key != params["device_key"]:
+                    continue
+                out.append(r)
+            m_sel = re.match(r"SELECT\s+(.+?)\s+FROM", query_str.strip(), re.IGNORECASE)
+            if m_sel:
+                cols = [c.strip() for c in m_sel.group(1).split(",")]
+                col_map = {"tenant_slug": 0, "site_slug": 1, "device_key": 2, "status": 3, "ts": 4, "raw_payload": 5}
+                if all(c in col_map for c in cols):
+                    indices = [col_map[c] for c in cols]
+                    out = [tuple(r[i] for i in indices) for r in out]
+            return _FakeQueryResult(out)
+
         rows = self.data.get("telemetry", [])
 
         # Filter by tenant_slug, site_slug, device_key, metric_name, start, end
@@ -177,6 +228,50 @@ class _InMemoryClickHouseClient:
                 vals = by_metric_vals[m_name]
                 out.append((m_name, sum(vals) / len(vals), min(vals), max(vals), len(vals)))
             return _FakeQueryResult(out)
+
+        if "SELECT TS, METRIC_VALUE" in q_upper:
+            out = [(r[5], float(r[4])) for r in filtered]
+            return _FakeQueryResult(out)
+
+        if "SELECT BUCKET AS TS" in q_upper or "SELECT BUCKET" in q_upper:
+            by_min: dict[int, list[float]] = {}
+            min_ts: dict[int, datetime] = {}
+            for r in filtered:
+                m_key = int(r[5].timestamp() // 60)
+                by_min.setdefault(m_key, []).append(float(r[4]))
+                if m_key not in min_ts:
+                    min_ts[m_key] = r[5].replace(second=0, microsecond=0)
+            out = []
+            for m_key in sorted(by_min.keys()):
+                vals = by_min[m_key]
+                out.append((min_ts[m_key], sum(vals) / len(vals), min(vals), max(vals), len(vals)))
+            return _FakeQueryResult(out)
+
+        m_select = re.match(r"SELECT\s+(.+?)\s+FROM\s+([a-zA-Z0-9_.]+)", query_str.strip(), re.IGNORECASE)
+        if m_select:
+            cols_str = m_select.group(1).strip()
+            table_name = m_select.group(2).strip().split(".")[-1]
+            cols = [c.strip() for c in cols_str.split(",")]
+            col_map = {
+                "tenant_slug": 0, "site_slug": 1, "device_key": 2,
+                "metric_name": 3, "metric_value": 4, "ts": 5, "raw_payload": 6,
+            }
+            if table_name == "device_status":
+                source_rows = self.data.get("device_status", [])
+                col_map["status"] = 3
+                col_map["ts"] = 4
+                col_map["raw_payload"] = 5
+            else:
+                source_rows = filtered
+
+            if all(c in col_map for c in cols):
+                indices = [col_map[c] for c in cols]
+                out = [tuple(r[i] for i in indices) for r in source_rows]
+                if "ORDER BY METRIC_NAME" in q_upper and "metric_name" in cols:
+                    out.sort(key=lambda x: x[cols.index("metric_name")])
+                elif "ORDER BY METRIC_VALUE" in q_upper and "metric_value" in cols:
+                    out.sort(key=lambda x: x[cols.index("metric_value")])
+                return _FakeQueryResult(out)
 
         return _FakeQueryResult(filtered)
 

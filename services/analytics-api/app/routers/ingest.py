@@ -10,7 +10,6 @@ from app.ingest_logic import (
     extract_buffered_records,
     resolve_timestamp,
 )
-from app.mysql_buffer import flatten_telemetry_for_mysql, mysql_telemetry_buffer
 from app.schemas import IngestRequest, IngestResponse
 from app.topics import STATUS_SUFFIX, TELEMETRY_SUFFIX, parse_device_topic
 
@@ -41,17 +40,6 @@ async def ingest(
         records = extract_buffered_records(body, payload.publish_received_at)
         rows_buffered = 0
         for rec_ts, metrics, rec_raw in records:
-            # Forward flat telemetry ke MySQL
-            mysql_rec = flatten_telemetry_for_mysql(
-                parsed_topic.tenant_slug,
-                parsed_topic.site_slug,
-                parsed_topic.device_key,
-                rec_ts,
-                metrics,
-                rec_raw,
-            )
-            await mysql_telemetry_buffer.add(mysql_rec)
-
             for metric_name, metric_value in metrics:
                 await telemetry_buffer.add(
                     (
