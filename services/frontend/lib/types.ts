@@ -77,7 +77,7 @@ export interface DeviceStatusItem {
   site_slug: string
   device_key: string
   status: "online" | "offline"
-  last_seen: string
+  last_seen: string | null
 }
 
 export interface DeviceStatusListResponse {

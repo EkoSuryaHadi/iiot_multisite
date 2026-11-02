@@ -49,7 +49,8 @@ class DeviceStatusOut(BaseModel):
     site_slug: str
     device_key: str
     status: Literal["online", "offline"]
-    last_seen: datetime
+    # None = device terdaftar tetapi belum pernah mengirim telemetry sama sekali.
+    last_seen: datetime | None = None
 
 
 class DeviceStatusListResponse(BaseModel):
