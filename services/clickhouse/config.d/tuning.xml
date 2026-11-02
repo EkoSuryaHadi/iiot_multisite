@@ -16,4 +16,9 @@
     <mark_cache_size>104857600</mark_cache_size>
     <uncompressed_cache_size>104857600</uncompressed_cache_size>
     <max_table_size_to_drop>0</max_table_size_to_drop>
+
+    <!-- Allow native BACKUP/RESTORE to the default disk -->
+    <backups>
+        <allowed_disk>default</allowed_disk>
+    </backups>
 </clickhouse>
