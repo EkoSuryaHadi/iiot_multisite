@@ -135,6 +135,10 @@ export interface SpsPowerFlow {
   i_mppt_out: number
   p_mppt_out: number
   v_busbar: number
+  /** Tegangan AC sisi PLN/rectifier (V). 0 bila sensor tidak melaporkan. */
+  v_pln?: number
+  /** Frekuensi AC PLN (Hz). 0 bila sensor tidak melaporkan. */
+  freq_pln?: number
   i_rectifier: number
   p_rectifier: number
   p_load: number

@@ -274,13 +274,14 @@ export default function PowerFlowCard({
                       <span>RECTIFIER PLN</span>
                     </div>
                     <span className="text-[10px] text-slate-500">
-                      {(pf?.rectifier_float_voltage ?? 53.5).toFixed(1)} V Float
+                      {pf?.v_pln ? `${pf.v_pln.toFixed(1)} VAC` : `${(pf?.rectifier_float_voltage ?? 53.5).toFixed(1)} V Float`}
+                      {pf?.freq_pln ? ` · ${pf.freq_pln.toFixed(2)} Hz` : ""}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[10px] text-slate-500">
                     <span>Suplai Sisa:</span>
                     <strong className="text-sky-600 dark:text-sky-400">
-                      {((pf?.p_rectifier || 0) / 1000).toFixed(2)} kW ({(pf?.i_rectifier ?? 0).toFixed(1)} A)
+                      {((pf?.p_rectifier || 0) / 1000).toFixed(2)} kW ({(pf?.i_rectifier ?? 0).toFixed(2)} A)
                     </strong>
                   </div>
                 </div>

@@ -39,7 +39,7 @@ export function StatusPulse({ status, showText = true, className }: StatusPulseP
   );
 }
 
-export function formatTimeAgo(dateInput: string | Date | number): string {
+export function formatTimeAgo(dateInput: string | Date | number | null | undefined): string {
   if (!dateInput) return "-";
   const date = typeof dateInput === "object" ? dateInput : new Date(dateInput);
   const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);

@@ -79,10 +79,10 @@ const DeviceStatusCard = () => {
                   </TableCell>
                   <TableCell className="pe-6 text-end">
                     <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300">
-                      {formatTimeAgo(d.last_seen)}
+                      {d.last_seen ? formatTimeAgo(d.last_seen) : "Belum ada data"}
                     </span>
                     <span className="block text-[11px] text-neutral-400">
-                      {new Date(d.last_seen).toLocaleTimeString()}
+                      {d.last_seen ? new Date(d.last_seen).toLocaleTimeString() : "—"}
                     </span>
                   </TableCell>
                 </TableRow>

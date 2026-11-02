@@ -75,6 +75,19 @@ def _auto_map_sps_metrics(raw: dict[str, float]) -> dict[str, float]:
             continue
         k_low = k.lower().strip()
 
+        # 0. Input AC PLN / Grid — dipetakan lebih dulu agar tegangan AC PLN (228 V)
+        #    tidak tertukar dengan tegangan DC busbar (float 53,5 V).
+        if "pln" in k_low or "grid" in k_low or "utility" in k_low:
+            if "volt" in k_low:
+                _set_if_zero("v_pln", v)
+            elif "curr" in k_low or "amp" in k_low:
+                _set_if_zero("i_rectifier", v)
+            elif "freq" in k_low:
+                _set_if_zero("freq_pln", v)
+            elif "power" in k_low:
+                _set_if_zero("p_rectifier", v)
+            continue
+
         # 1. PV Voltage
         if k_low in ("v_pv", "vpv", "v_pv_string1", "top_pv_voltage", "pv_voltage", "solar_voltage") or (
             ("pv" in k_low or "solar" in k_low or "panel" in k_low) and "volt" in k_low
@@ -365,15 +378,29 @@ def _build_performance_payload(
         p_mppt_out = round(p_pv * 0.98, 2)
 
     v_busbar = mapped_latest.get("v_busbar", v_mppt_out or site_cfg["rectifier_float_voltage"])
+    # Sisi AC PLN (input rectifier). Daya rectifier dihitung dari tegangan AC x arus AC,
+    # bukan dari tegangan DC busbar, supaya "Suplai Sisa" mencerminkan beban PLN sebenarnya.
+    v_pln = mapped_latest.get("v_pln", 0.0)
+    freq_pln = mapped_latest.get("freq_pln", 0.0)
     i_rectifier = mapped_latest.get("i_rectifier", 0.0)
-    p_rectifier = mapped_latest.get("p_rectifier", round(v_busbar * i_rectifier, 2))
-    p_load = mapped_latest.get("p_load", round(p_mppt_out + p_rectifier, 2))
+    p_rectifier = round((v_pln if v_pln > 0.0 else v_busbar) * i_rectifier, 2) if i_rectifier > 0.0 else 0.0
+    if p_rectifier <= 0.0:
+        p_rectifier = mapped_latest.get("p_rectifier", 0.0)
+    p_load = mapped_latest.get("p_load", 0.0)
+    if p_load <= 0.0:
+        p_load = round(p_mppt_out + p_rectifier, 2)
     irradiance = mapped_latest.get("irradiance", 0.0)
     temp_mppt = mapped_latest.get("temp_mppt", 0.0)
 
     eff_hours = max(1.0, min(hours_window, 24.0))
     avg_p_mppt = mapped_avg.get("p_mppt_out", mapped_avg.get("p_pv", p_mppt_out))
-    avg_p_rect = mapped_avg.get("p_rectifier", p_rectifier)
+    # Daya rectifier rata-rata: prioritaskan V_AC PLN x I_AC PLN. Metrik generik lama
+    # ("Power"/"Current") sengaja jadi fallback terakhir karena bisa berasal dari data uji.
+    avg_v_pln = mapped_avg.get("v_pln", v_pln)
+    avg_i_rect = mapped_avg.get("i_rectifier", i_rectifier)
+    avg_p_rect = round((avg_v_pln if avg_v_pln > 0.0 else v_busbar) * avg_i_rect, 2)
+    if avg_p_rect <= 0.0:
+        avg_p_rect = mapped_avg.get("p_rectifier", p_rectifier)
     avg_irr = mapped_avg.get("irradiance", irradiance)
 
     solar_kwh = mapped_latest.get("solar_kwh", round((avg_p_mppt / 1000.0) * eff_hours, 3))
@@ -432,6 +459,8 @@ def _build_performance_payload(
             "i_mppt_out": round(i_mppt_out, 2),
             "p_mppt_out": round(p_mppt_out, 2),
             "v_busbar": round(v_busbar, 2),
+            "v_pln": round(v_pln, 2),
+            "freq_pln": round(freq_pln, 2),
             "i_rectifier": round(i_rectifier, 2),
             "p_rectifier": round(p_rectifier, 2),
             "p_load": round(p_load, 2),
