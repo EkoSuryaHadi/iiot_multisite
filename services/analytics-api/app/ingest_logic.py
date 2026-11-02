@@ -1,4 +1,5 @@
 import json
+import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -49,6 +50,58 @@ SPS_METRIC_ALIASES: dict[str, str] = {
 }
 
 _TIMESTAMP_KEYS = {"ts", "timestamp", "time"}
+
+# --- Normalisasi skala metrik PLN -------------------------------------------
+# Data logger (Epever/CANINDO) kadang mengirim metrik yang sama dengan skala
+# berbeda: tegangan 228,7 V terkirim sebagai 2287, frekuensi 50,04 Hz terkirim
+# sebagai 5004. Nilai seperti ini merusak rata-rata, maksimum, dan konversi kWh,
+# jadi dinormalkan sekali di pintu masuk ingest.
+_PLN_VOLTAGE_MAX_V = 300.0     # 230 V + toleransi
+_PLN_FREQ_MAX_HZ = 70.0        # 50 Hz + toleransi
+_PLN_CURRENT_MAX_A = 200.0     # arus sisi AC PLN
+
+
+def normalize_metric_value(name: str, value: float) -> float | None:
+    """Normalkan nilai metrik PLN yang salah skala.
+
+    Mengembalikan nilai terkoreksi, atau None bila nilainya mustahil secara fisik
+    (lebih baik dibuang daripada merusak agregasi).
+    """
+    if not math.isfinite(value):
+        return None
+
+    key = name.lower().strip()
+    is_grid = ("pln" in key) or ("grid" in key) or ("utility" in key)
+
+    if is_grid:
+        if "volt" in key:
+            v = value
+            while abs(v) > _PLN_VOLTAGE_MAX_V * 10:
+                v /= 10.0
+            if abs(v) > _PLN_VOLTAGE_MAX_V * 10:
+                return None
+            if abs(v) > _PLN_VOLTAGE_MAX_V:
+                v /= 10.0
+            return round(v, 2)
+
+        if "freq" in key:
+            v = value
+            while abs(v) > _PLN_FREQ_MAX_HZ * 10:
+                v /= 10.0
+            if abs(v) > _PLN_FREQ_MAX_HZ * 10:
+                return None
+            if abs(v) > _PLN_FREQ_MAX_HZ:
+                v /= 10.0
+            return round(v, 2)
+
+        if "curr" in key or "amp" in key:
+            if abs(value) > _PLN_CURRENT_MAX_A:
+                return None
+            return round(value, 3)
+
+    if abs(value) > 1e7:
+        return None
+    return value
 
 
 def coerce_payload_to_dict(payload: Any) -> dict | list | None:
@@ -125,14 +178,18 @@ def extract_numeric_metrics(payload: Any) -> list[tuple[str, float]]:
         if isinstance(val, bool):
             return
         if isinstance(val, (int, float)):
-            metrics.append((key_name, float(val)))
+            norm = normalize_metric_value(key_name, float(val))
+            if norm is not None:
+                metrics.append((key_name, norm))
             return
         if isinstance(val, str):
             try:
                 num = float(val.strip())
-                metrics.append((key_name, num))
             except (ValueError, TypeError):
-                pass
+                return
+            norm = normalize_metric_value(key_name, num)
+            if norm is not None:
+                metrics.append((key_name, norm))
             return
         if isinstance(val, dict):
             for k, v in val.items():
