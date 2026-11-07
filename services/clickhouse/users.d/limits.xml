@@ -1,0 +1,17 @@
+<clickhouse>
+    <!-- ===== LIMIT PER QUERY (2026-11-05) =====
+         Sebelumnya max_memory_usage = 0 (tanpa batas per query), jadi satu
+         query salah bisa mengambil seluruh anggaran server dan membuat
+         ingest gagal berantai. Dengan 1.5 GiB, query boros dibatalkan sendiri
+         (MEMORY_LIMIT_EXCEEDED) dan server tetap hidup. -->
+    <profiles>
+        <default>
+            <max_memory_usage>1610612736</max_memory_usage>
+            <max_memory_usage_for_user>2147483648</max_memory_usage_for_user>
+            <!-- GROUP BY / ORDER BY besar dibuang ke disk, bukan ke RAM -->
+            <max_bytes_before_external_group_by>536870912</max_bytes_before_external_group_by>
+            <max_bytes_before_external_sort>536870912</max_bytes_before_external_sort>
+            <max_threads>4</max_threads>
+        </default>
+    </profiles>
+</clickhouse>

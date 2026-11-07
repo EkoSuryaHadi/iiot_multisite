@@ -14,6 +14,8 @@ volumes:
   emqx1-data:
   caddy-data:
   caddy-config:
+  garage-meta:
+  garage-data:
 
 services:
   postgres:
@@ -38,7 +40,7 @@ services:
       start_period: 10s
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8-alpine
+    image: clickhouse/clickhouse-server:25.8-alpine
     container_name: iiot-clickhouse
     restart: unless-stopped
     logging: *default-logging
@@ -52,6 +54,7 @@ services:
       - clickhouse-data:/var/lib/clickhouse
       - ./services/clickhouse/init:/docker-entrypoint-initdb.d
       - ./services/clickhouse/config.d/tuning.xml:/etc/clickhouse-server/config.d/tuning.xml:ro
+      - ./services/clickhouse/users.d/limits.xml:/etc/clickhouse-server/users.d/limits.xml:ro
     networks:
       - iiot-net
     healthcheck:
@@ -127,7 +130,7 @@ services:
     networks:
       - iiot-net
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 3)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -157,7 +160,7 @@ services:
     networks:
       - iiot-net
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 3)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -194,7 +197,7 @@ services:
     networks:
       - iiot-net
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 3)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -271,3 +274,25 @@ services:
         condition: service_healthy
     networks:
       - iiot-net
+
+  garage:
+    image: dxflrs/garage:v1.0.1
+    container_name: iiot-garage
+    restart: unless-stopped
+    logging: *default-logging
+    mem_limit: 512m
+    volumes:
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+      - ./services/garage/garage.toml:/etc/garage.toml:ro
+    ports:
+      - "127.0.0.1:3900:3900"
+      - "127.0.0.1:3903:3903"
+    networks:
+      - iiot-net
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

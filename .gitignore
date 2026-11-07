@@ -25,3 +25,12 @@ docker/volumes/
 *.tar.gz
 *.zip
 *.tar
+
+# --- tambahan: artefak backup & kredensial ---
+*.bak
+*.bak-*
+*.bak-pre-*
+services/clickhouse/staging_*/
+services/frontend_backup_*/
+backup_auth_webhook_*/
+services/garage/garage.toml
