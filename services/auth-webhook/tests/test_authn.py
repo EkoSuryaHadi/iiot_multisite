@@ -49,3 +49,28 @@ def test_internal_service_wrong_password_deny(client):
 def test_unknown_username_deny(client):
     resp = client.post("/authn", json={"username": "ghost@nowhere.dev", "password": "whatever"})
     assert resp.json()["result"] == "deny"
+
+
+def test_device_authn_caches_bcrypt_verification(client, device_a, tenant_a, site_a, monkeypatch):
+    import app.identity as identity_mod
+
+    call_count = 0
+    orig_verify = identity_mod.verify_secret
+
+    def counting_verify(plain: str, hashed: str) -> bool:
+        nonlocal call_count
+        call_count += 1
+        return orig_verify(plain, hashed)
+
+    monkeypatch.setattr(identity_mod, "verify_secret", counting_verify)
+
+    client_id = f"{tenant_a.slug}-{site_a.slug}-dev-1"
+    resp1 = client.post("/authn", json={"username": client_id, "password": "device-secret"})
+    resp2 = client.post("/authn", json={"username": client_id, "password": "device-secret"})
+    assert resp1.json()["result"] == "allow"
+    assert resp2.json()["result"] == "allow"
+    assert call_count == 1
+
+    # Password salah tetap harus ditolak meskipun kredensial benar sudah di-cache
+    resp_wrong = client.post("/authn", json={"username": client_id, "password": "wrong-password"})
+    assert resp_wrong.json()["result"] == "deny"

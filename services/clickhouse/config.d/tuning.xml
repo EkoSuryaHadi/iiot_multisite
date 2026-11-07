@@ -1,0 +1,43 @@
+<clickhouse>
+    <!-- Disable system logs that bloat memory and disk -->
+    <text_log remove="1"/>
+    <trace_log remove="1"/>
+    <metric_log remove="1"/>
+    <asynchronous_metric_log remove="1"/>
+    <processors_profile_log remove="1"/>
+    <query_thread_log remove="1"/>
+    <query_views_log remove="1"/>
+    <opentelemetry_span_log remove="1"/>
+    <asynchronous_insert_log remove="1"/>
+    <session_log remove="1"/>
+    <part_log remove="1"/>
+
+    <!-- Restrict cache allocations -->
+    <mark_cache_size>104857600</mark_cache_size>
+    <uncompressed_cache_size>104857600</uncompressed_cache_size>
+    <max_table_size_to_drop>0</max_table_size_to_drop>
+
+    <!-- Allow native BACKUP/RESTORE to the default disk -->
+    <backups>
+        <allowed_disk>default</allowed_disk>
+    </backups>
+
+    <!-- ===== MEMORY GUARDRAIL (2026-11-05) =====
+         cgroup container = 4 GiB. Server dibatasi 2.75 GiB supaya selalu ada
+         sisa ~1.25 GiB untuk merge, HTTP handler, dan OS saat query berat.
+         Tanpa ini ClickHouse boleh memakai 90% cgroup (3.60 GiB) dan satu
+         query berat/loop kegagalan bisa menahan seluruh memori -> semua query
+         (termasuk SELECT count()) ditolak dengan MEMORY_LIMIT_EXCEEDED. -->
+    <max_server_memory_usage>2952790016</max_server_memory_usage>
+
+    <!-- Batasi query paralel supaya buffer per-query tidak menumpuk -->
+    <max_concurrent_queries>24</max_concurrent_queries>
+
+    <!-- system.query_log ikut memakan memori; simpan 3 hari saja -->
+    <query_log>
+        <database>system</database>
+        <table>query_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <ttl>event_date + INTERVAL 3 DAY</ttl>
+    </query_log>
+</clickhouse>

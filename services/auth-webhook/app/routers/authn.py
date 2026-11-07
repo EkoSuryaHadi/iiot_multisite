@@ -11,6 +11,8 @@ router = APIRouter(tags=["emqx"])
 @router.post("/authn", response_model=AuthnResponse)
 def authn(payload: AuthnRequest, db: Session = Depends(get_db)) -> AuthnResponse:
     identity = authenticate(db, payload.username, payload.password)
+    if identity is None and payload.clientid and payload.clientid != payload.username:
+        identity = authenticate(db, payload.clientid, payload.password)
     if identity is None:
         return AuthnResponse(result="deny")
     return AuthnResponse(result="allow", is_superuser=identity.is_superuser)

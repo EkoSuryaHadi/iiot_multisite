@@ -35,7 +35,7 @@ import {
 import { useTenantContext } from "@/contexts/TenantContext";
 import { ApiRequestError, usersApi } from "@/lib/api-client";
 import type { AppUser, UserRole } from "@/lib/types";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { KeyRound, Loader2, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
@@ -45,6 +45,69 @@ const ROLE_LABEL: Record<UserRole, string> = {
   operator: "Operator",
   viewer: "Viewer",
 };
+
+function ChangePasswordDialog({ user, onUpdated }: { user: AppUser; onUpdated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) {
+      toast.error("Password minimal 6 karakter");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await usersApi.update(user.id, { password });
+      toast.success(`Password untuk ${user.email} berhasil diubah`);
+      setOpen(false);
+      setPassword("");
+      onUpdated();
+    } catch (error) {
+      toast.error(error instanceof ApiRequestError ? error.message : "Gagal mengubah password");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" title="Ubah Password">
+          <KeyRound className="w-4 h-4 mr-1" /> Password
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Ubah Password User</DialogTitle>
+          <DialogDescription>
+            Masukkan password baru untuk <strong>{user.email}</strong>.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor={`new-pw-${user.id}`}>Password Baru</Label>
+            <Input
+              id={`new-pw-${user.id}`}
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Minimal 6 karakter"
+              minLength={6}
+              required
+            />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Simpan Password"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function CreateUserDialog({ tenantId, onCreated }: { tenantId?: string; onCreated: () => void }) {
   const [open, setOpen] = useState(false);
@@ -143,7 +206,6 @@ function UsersPageContent() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (isSuperadmin && !selectedTenant) return;
     setLoading(true);
     try {
       const all = await usersApi.list();
@@ -195,7 +257,11 @@ function UsersPageContent() {
           {loading ? (
             <p className="text-sm text-neutral-500 px-6">Memuat...</p>
           ) : users.length === 0 ? (
-            <p className="text-sm text-neutral-500 px-6">Belum ada user.</p>
+            <p className="text-sm text-neutral-500 px-6">
+              {isSuperadmin && selectedTenant
+                ? `Belum ada user di tenant ${selectedTenant.name}.`
+                : "Belum ada user."}
+            </p>
           ) : (
             <Table>
               <TableHeader>
@@ -222,6 +288,7 @@ function UsersPageContent() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <ChangePasswordDialog user={user} onUpdated={load} />
                         <Button variant="outline" size="sm" onClick={() => toggleActive(user)}>
                           {user.is_active ? "Nonaktifkan" : "Aktifkan"}
                         </Button>

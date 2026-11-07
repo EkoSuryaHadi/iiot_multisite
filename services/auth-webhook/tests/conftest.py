@@ -17,7 +17,7 @@ os.environ.setdefault("CACHE_TTL_SECONDS", "30")
 os.environ.setdefault("INTERNAL_SERVICE_USERNAME", "internal-service")
 os.environ.setdefault("INTERNAL_SERVICE_PASSWORD", "internal-secret")
 
-from app.cache import authn_cache  # noqa: E402
+from app.cache import authn_cache, verified_password_cache  # noqa: E402
 from app.config import settings  # noqa: E402
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
@@ -66,6 +66,7 @@ def db_session(engine):
 
     app.dependency_overrides[get_db] = _override_get_db
     authn_cache.clear()
+    verified_password_cache.clear()
     yield session
 
     session.close()
@@ -73,6 +74,7 @@ def db_session(engine):
     connection.close()
     app.dependency_overrides.pop(get_db, None)
     authn_cache.clear()
+    verified_password_cache.clear()
 
 
 @pytest.fixture()

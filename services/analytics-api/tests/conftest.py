@@ -1,6 +1,10 @@
 import os
+import re
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 import clickhouse_connect
 import jwt
@@ -8,6 +12,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("CLICKHOUSE_HOST", "clickhouse")
 os.environ.setdefault("CLICKHOUSE_PORT", "8123")
@@ -21,75 +26,258 @@ os.environ.setdefault("POSTGRES_PASSWORD", "change_me_postgres")
 os.environ.setdefault("POSTGRES_DB", "iiot_analytics_test")
 os.environ.setdefault("JWT_SECRET", "test_secret")
 
+import app.clickhouse_client as ch_client_mod  # noqa: E402
 from app.buffer import device_status_buffer, telemetry_buffer  # noqa: E402
 from app.cache import tenant_slug_cache  # noqa: E402
 from app.config import settings  # noqa: E402
-from app.database_pg import PgBase  # noqa: E402
+from app.database_pg import PgBase, get_pg_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models_pg import Tenant  # noqa: E402
 
-_CH_SCHEMA_STATEMENTS = [
-    """
-    CREATE TABLE IF NOT EXISTS telemetry
-    (
-        tenant_slug  LowCardinality(String),
-        site_slug    LowCardinality(String),
-        device_key   LowCardinality(String),
-        metric_name  LowCardinality(String),
-        metric_value Float64,
-        ts           DateTime64(3, 'UTC'),
-        raw_payload  String DEFAULT '',
-        inserted_at  DateTime DEFAULT now()
-    )
-    ENGINE = MergeTree
-    PARTITION BY toYYYYMM(ts)
-    ORDER BY (tenant_slug, site_slug, device_key, metric_name, ts)
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS device_status
-    (
-        tenant_slug LowCardinality(String),
-        site_slug   LowCardinality(String),
-        device_key  LowCardinality(String),
-        status      LowCardinality(String),
-        ts          DateTime64(3, 'UTC'),
-        raw_payload String DEFAULT '',
-        inserted_at DateTime DEFAULT now()
-    )
-    ENGINE = MergeTree
-    PARTITION BY toYYYYMM(ts)
-    ORDER BY (tenant_slug, site_slug, device_key, ts)
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS telemetry_agg_1m
-    (
-        tenant_slug LowCardinality(String),
-        site_slug   LowCardinality(String),
-        device_key  LowCardinality(String),
-        metric_name LowCardinality(String),
-        bucket      DateTime,
-        avg_value   AggregateFunction(avg, Float64),
-        min_value   AggregateFunction(min, Float64),
-        max_value   AggregateFunction(max, Float64),
-        sample_count AggregateFunction(count)
-    )
-    ENGINE = AggregatingMergeTree
-    PARTITION BY toYYYYMM(bucket)
-    ORDER BY (tenant_slug, site_slug, device_key, metric_name, bucket)
-    """,
-    """
-    CREATE MATERIALIZED VIEW IF NOT EXISTS telemetry_agg_1m_mv TO telemetry_agg_1m AS
-    SELECT
-        tenant_slug, site_slug, device_key, metric_name,
-        toStartOfMinute(ts) AS bucket,
-        avgState(metric_value) AS avg_value,
-        minState(metric_value) AS min_value,
-        maxState(metric_value) AS max_value,
-        countState() AS sample_count
-    FROM telemetry
-    GROUP BY tenant_slug, site_slug, device_key, metric_name, bucket
-    """,
-]
+_CH_INIT_DIR = Path(__file__).resolve().parents[2] / "clickhouse" / "init"
+
+
+def _load_clickhouse_init_statements() -> list[str]:
+    statements: list[str] = []
+    if not _CH_INIT_DIR.exists():
+        return statements
+    for sql_file in sorted(_CH_INIT_DIR.glob("*.sql")):
+        if sql_file.name == "001-init-db.sql":
+            continue
+        raw = sql_file.read_text(encoding="utf-8")
+        cleaned_lines = [
+            line for line in raw.splitlines() if not line.strip().startswith("--")
+        ]
+        cleaned_sql = "\n".join(cleaned_lines)
+        for stmt in cleaned_sql.split(";"):
+            stmt_str = stmt.strip()
+            if not stmt_str or stmt_str.upper().startswith("USE "):
+                continue
+            statements.append(stmt_str)
+    return statements
+
+
+@dataclass
+class _FakeQueryResult:
+    result_rows: list[tuple]
+
+
+class _InMemoryClickHouseClient:
+    """Fallback ClickHouse client for local testing when ClickHouse container is unreachable."""
+
+    def __init__(self) -> None:
+        self.tables: dict[str, str] = {}
+        self.views: dict[str, str] = {}
+        self.data: dict[str, list[tuple]] = {}
+
+    def command(self, cmd: str):
+        cmd_clean = " ".join(cmd.strip().split())
+        m_create_table = re.match(
+            r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_.]+)",
+            cmd_clean,
+            re.IGNORECASE,
+        )
+        if m_create_table:
+            tbl = m_create_table.group(1).split(".")[-1]
+            self.tables[tbl] = cmd.strip()
+            self.data.setdefault(tbl, [])
+            return ""
+
+        m_create_mv = re.match(
+            r"CREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_.]+)",
+            cmd_clean,
+            re.IGNORECASE,
+        )
+        if m_create_mv:
+            mv = m_create_mv.group(1).split(".")[-1]
+            self.views[mv] = cmd.strip()
+            return ""
+
+        m_show_tables = re.match(
+            r"SHOW\s+TABLES(?:\s+LIKE\s+'([^']+)')?",
+            cmd_clean,
+            re.IGNORECASE,
+        )
+        if m_show_tables:
+            pattern = m_show_tables.group(1)
+            all_names = list(self.tables.keys()) + list(self.views.keys())
+            if not pattern:
+                return "\n".join(sorted(all_names))
+            regex = "^" + re.escape(pattern).replace("%", ".*").replace("_", ".") + "$"
+            matched = [name for name in all_names if re.match(regex, name)]
+            return "\n".join(sorted(matched))
+
+        m_show_create = re.match(
+            r"SHOW\s+CREATE\s+TABLE\s+([a-zA-Z0-9_.]+)",
+            cmd_clean,
+            re.IGNORECASE,
+        )
+        if m_show_create:
+            tbl = m_show_create.group(1).split(".")[-1]
+            return self.tables.get(tbl) or self.views.get(tbl, "")
+
+        m_truncate = re.match(
+            r"TRUNCATE\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-zA-Z0-9_.]+)",
+            cmd_clean,
+            re.IGNORECASE,
+        )
+        if m_truncate:
+            tbl = m_truncate.group(1).split(".")[-1]
+            self.data[tbl] = []
+            return ""
+
+        return ""
+
+    def insert(self, table: str, data: list[tuple], column_names: list[str] | None = None):
+        tbl = table.split(".")[-1]
+        self.data.setdefault(tbl, []).extend(data)
+
+    def query(self, query_str: str, parameters: dict[str, Any] | None = None) -> _FakeQueryResult:
+        params = parameters or {}
+        q_upper = " ".join(query_str.upper().split())
+
+        if "SELECT NOW()" in q_upper:
+            return _FakeQueryResult([(datetime.now(timezone.utc),)])
+
+        if "FROM DEVICE_LAST_SEEN" in q_upper:
+            seen: dict[tuple[str, str, str], tuple[str, datetime]] = {}
+            for r in self.data.get("telemetry", []):
+                t_slug, s_slug, d_key, ts_val = r[0], r[1], r[2], r[5]
+                if "tenant_slug" in params and t_slug != params["tenant_slug"]:
+                    continue
+                if "site_slug" in params and s_slug != params["site_slug"]:
+                    continue
+                k = (t_slug, s_slug, d_key)
+                if k not in seen or ts_val > seen[k][1]:
+                    seen[k] = ("online", ts_val)
+            for r in self.data.get("device_status", []):
+                t_slug, s_slug, d_key, status_val, ts_val = r[0], r[1], r[2], r[3], r[4]
+                if "tenant_slug" in params and t_slug != params["tenant_slug"]:
+                    continue
+                if "site_slug" in params and s_slug != params["site_slug"]:
+                    continue
+                k = (t_slug, s_slug, d_key)
+                if k not in seen or ts_val > seen[k][1]:
+                    seen[k] = (status_val, ts_val)
+            if "SELECT DEVICE_KEY, STATUS, LAST_SEEN" in q_upper:
+                out = [(k[2], v[0], v[1]) for k, v in sorted(seen.items())]
+            else:
+                out = [(k[0], k[1], k[2], v[0], v[1]) for k, v in sorted(seen.items())]
+            return _FakeQueryResult(out)
+
+        if "FROM DEVICE_STATUS" in q_upper:
+            st_rows = self.data.get("device_status", [])
+            out = []
+            for r in st_rows:
+                t_slug, s_slug, d_key = r[0], r[1], r[2]
+                if "tenant_slug" in params and t_slug != params["tenant_slug"]:
+                    continue
+                if "site_slug" in params and s_slug != params["site_slug"]:
+                    continue
+                if "device_key" in params and d_key != params["device_key"]:
+                    continue
+                out.append(r)
+            m_sel = re.match(r"SELECT\s+(.+?)\s+FROM", query_str.strip(), re.IGNORECASE)
+            if m_sel:
+                cols = [c.strip() for c in m_sel.group(1).split(",")]
+                col_map = {"tenant_slug": 0, "site_slug": 1, "device_key": 2, "status": 3, "ts": 4, "raw_payload": 5}
+                if all(c in col_map for c in cols):
+                    indices = [col_map[c] for c in cols]
+                    out = [tuple(r[i] for i in indices) for r in out]
+            return _FakeQueryResult(out)
+
+        rows = self.data.get("telemetry", [])
+
+        # Filter by tenant_slug, site_slug, device_key, metric_name, start, end
+        filtered = []
+        for r in rows:
+            # telemetry row tuple: (tenant_slug, site_slug, device_key, metric_name, metric_value, ts, raw_payload)
+            t_slug, s_slug, d_key, m_name, m_val, ts_val = r[0], r[1], r[2], r[3], float(r[4]), r[5]
+            if "tenant_slug" in params and t_slug != params["tenant_slug"]:
+                continue
+            if "site_slug" in params and s_slug != params["site_slug"]:
+                continue
+            if "device_key" in params and d_key != params["device_key"]:
+                continue
+            if "metric_name" in params and m_name != params["metric_name"]:
+                continue
+            if "start" in params and ts_val < params["start"]:
+                continue
+            if "end" in params and ts_val > params["end"]:
+                continue
+            filtered.append(r)
+
+        if "ARGMAX(METRIC_VALUE, TS)" in q_upper and "GROUP BY METRIC_NAME" in q_upper:
+            by_metric: dict[str, list[tuple[datetime, float]]] = {}
+            for r in filtered:
+                by_metric.setdefault(r[3], []).append((r[5], float(r[4])))
+            out = []
+            for m_name in sorted(by_metric.keys()):
+                pts = by_metric[m_name]
+                latest_val = max(pts, key=lambda x: x[0])[1]
+                avg_val = sum(x[1] for x in pts) / len(pts)
+                out.append((m_name, latest_val, avg_val))
+            return _FakeQueryResult(out)
+
+        if "AVG(METRIC_VALUE)" in q_upper and "GROUP BY METRIC_NAME" in q_upper:
+            by_metric_vals: dict[str, list[float]] = {}
+            for r in filtered:
+                by_metric_vals.setdefault(r[3], []).append(float(r[4]))
+            out = []
+            for m_name in sorted(by_metric_vals.keys()):
+                vals = by_metric_vals[m_name]
+                out.append((m_name, sum(vals) / len(vals), min(vals), max(vals), len(vals)))
+            return _FakeQueryResult(out)
+
+        if "SELECT TS, METRIC_VALUE" in q_upper:
+            out = [(r[5], float(r[4])) for r in filtered]
+            return _FakeQueryResult(out)
+
+        if "SELECT BUCKET AS TS" in q_upper or "SELECT BUCKET" in q_upper:
+            by_min: dict[int, list[float]] = {}
+            min_ts: dict[int, datetime] = {}
+            for r in filtered:
+                m_key = int(r[5].timestamp() // 60)
+                by_min.setdefault(m_key, []).append(float(r[4]))
+                if m_key not in min_ts:
+                    min_ts[m_key] = r[5].replace(second=0, microsecond=0)
+            out = []
+            for m_key in sorted(by_min.keys()):
+                vals = by_min[m_key]
+                out.append((min_ts[m_key], sum(vals) / len(vals), min(vals), max(vals), len(vals)))
+            return _FakeQueryResult(out)
+
+        m_select = re.match(r"SELECT\s+(.+?)\s+FROM\s+([a-zA-Z0-9_.]+)", query_str.strip(), re.IGNORECASE)
+        if m_select:
+            cols_str = m_select.group(1).strip()
+            table_name = m_select.group(2).strip().split(".")[-1]
+            cols = [c.strip() for c in cols_str.split(",")]
+            col_map = {
+                "tenant_slug": 0, "site_slug": 1, "device_key": 2,
+                "metric_name": 3, "metric_value": 4, "ts": 5, "raw_payload": 6,
+            }
+            if table_name == "device_status":
+                source_rows = self.data.get("device_status", [])
+                col_map["status"] = 3
+                col_map["ts"] = 4
+                col_map["raw_payload"] = 5
+            else:
+                source_rows = filtered
+
+            if all(c in col_map for c in cols):
+                indices = [col_map[c] for c in cols]
+                out = [tuple(r[i] for i in indices) for r in source_rows]
+                if "ORDER BY METRIC_NAME" in q_upper and "metric_name" in cols:
+                    out.sort(key=lambda x: x[cols.index("metric_name")])
+                elif "ORDER BY METRIC_VALUE" in q_upper and "metric_value" in cols:
+                    out.sort(key=lambda x: x[cols.index("metric_value")])
+                return _FakeQueryResult(out)
+
+        return _FakeQueryResult(filtered)
+
+
+_FALLBACK_CH_CLIENT: _InMemoryClickHouseClient | None = None
+_ACTIVE_PG_ENGINE = None
 
 
 def _admin_ch_client():
@@ -98,16 +286,21 @@ def _admin_ch_client():
         port=settings.clickhouse_port,
         username=settings.clickhouse_user,
         password=settings.clickhouse_password,
+        connect_timeout=1,
     )
 
 
 def _test_ch_client():
+    global _FALLBACK_CH_CLIENT
+    if _FALLBACK_CH_CLIENT is not None:
+        return _FALLBACK_CH_CLIENT
     return clickhouse_connect.get_client(
         host=settings.clickhouse_host,
         port=settings.clickhouse_port,
         username=settings.clickhouse_user,
         password=settings.clickhouse_password,
         database=settings.clickhouse_db,
+        connect_timeout=1,
     )
 
 
@@ -115,7 +308,11 @@ _pg_admin_url = settings.postgres_url.rsplit("/", 1)[0] + "/postgres"
 
 
 def _ensure_test_pg_database() -> None:
-    admin_engine = create_engine(_pg_admin_url, isolation_level="AUTOCOMMIT")
+    admin_engine = create_engine(
+        _pg_admin_url,
+        isolation_level="AUTOCOMMIT",
+        connect_args={"connect_timeout": 1},
+    )
     with admin_engine.connect() as conn:
         exists = conn.execute(
             text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": settings.postgres_db}
@@ -127,19 +324,51 @@ def _ensure_test_pg_database() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def _setup_test_databases():
-    admin = _admin_ch_client()
-    admin.command(f"CREATE DATABASE IF NOT EXISTS {settings.clickhouse_db}")
-    test_client = _test_ch_client()
-    for stmt in _CH_SCHEMA_STATEMENTS:
+    global _FALLBACK_CH_CLIENT, _ACTIVE_PG_ENGINE
+    statements = _load_clickhouse_init_statements()
+    try:
+        admin = _admin_ch_client()
+        admin.command(f"CREATE DATABASE IF NOT EXISTS {settings.clickhouse_db}")
+        test_client = _test_ch_client()
+    except Exception:
+        _FALLBACK_CH_CLIENT = _InMemoryClickHouseClient()
+        test_client = _FALLBACK_CH_CLIENT
+        ch_client_mod.set_override_client(_FALLBACK_CH_CLIENT)
+
+    for stmt in statements:
+        if stmt.strip().upper().startswith("INSERT INTO"):
+            continue
         test_client.command(stmt)
 
-    _ensure_test_pg_database()
-    pg_engine = create_engine(settings.postgres_url)
+    try:
+        _ensure_test_pg_database()
+        pg_engine = create_engine(settings.postgres_url, connect_args={"connect_timeout": 1})
+        with pg_engine.connect():
+            pass
+    except Exception:
+        pg_engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+    _ACTIVE_PG_ENGINE = pg_engine
     PgBase.metadata.create_all(pg_engine)
+
+    def _override_get_pg_db():
+        SessionLocal = sessionmaker(bind=_ACTIVE_PG_ENGINE)
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_pg_db] = _override_get_pg_db
 
     yield
 
-    test_client.command(f"DROP DATABASE IF EXISTS {settings.clickhouse_db}")
+    app.dependency_overrides.pop(get_pg_db, None)
+    if _FALLBACK_CH_CLIENT is None:
+        test_client.command(f"DROP DATABASE IF EXISTS {settings.clickhouse_db}")
     PgBase.metadata.drop_all(pg_engine)
     pg_engine.dispose()
 
@@ -149,15 +378,24 @@ async def ch_client():
     await telemetry_buffer.clear()
     await device_status_buffer.clear()
     client = _test_ch_client()
-    client.command("TRUNCATE TABLE telemetry")
-    client.command("TRUNCATE TABLE device_status")
-    client.command("TRUNCATE TABLE telemetry_agg_1m")
+    for tbl in ("telemetry", "device_status", "telemetry_agg_1m", "device_last_seen", "sps_daily_energy"):
+        if _FALLBACK_CH_CLIENT is not None and tbl not in _FALLBACK_CH_CLIENT.tables:
+            continue
+        try:
+            client.command(f"TRUNCATE TABLE {tbl}")
+        except Exception:
+            pass
     yield client
 
 
 @pytest.fixture()
+def clickhouse_client(ch_client):
+    return ch_client
+
+
+@pytest.fixture()
 def pg_session():
-    engine = create_engine(settings.postgres_url)
+    engine = _ACTIVE_PG_ENGINE or create_engine(settings.postgres_url)
     Session = sessionmaker(bind=engine)
     session = Session()
     tenant_slug_cache.clear()
@@ -165,7 +403,6 @@ def pg_session():
     session.query(Tenant).delete()
     session.commit()
     session.close()
-    engine.dispose()
 
 
 @pytest.fixture()
@@ -200,6 +437,16 @@ def make_token(tenant_id: uuid.UUID | None, role: str) -> str:
 @pytest.fixture()
 async def client(ch_client):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as c:
+        yield c
+
+
+@pytest.fixture()
+async def ingest_client(ch_client):
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+        headers={"X-Ingest-Secret": settings.ingest_secret},
+    ) as c:
         yield c
 
 

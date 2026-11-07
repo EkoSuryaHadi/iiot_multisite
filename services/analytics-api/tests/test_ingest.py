@@ -1,5 +1,22 @@
-async def test_ingest_telemetry_numeric_metrics(client, ch_client, flush_buffers):
+async def test_ingest_missing_secret_rejected(client):
     resp = await client.post(
+        "/ingest",
+        json={"topic": "t/acme/s/jkt/d/gw-01/telemetry", "payload": {"temp": 25.5}},
+    )
+    assert resp.status_code == 401
+
+
+async def test_ingest_invalid_secret_rejected(client):
+    resp = await client.post(
+        "/ingest",
+        headers={"X-Ingest-Secret": "wrong_secret"},
+        json={"topic": "t/acme/s/jkt/d/gw-01/telemetry", "payload": {"temp": 25.5}},
+    )
+    assert resp.status_code == 401
+
+
+async def test_ingest_telemetry_numeric_metrics(ingest_client, ch_client, flush_buffers):
+    resp = await ingest_client.post(
         "/ingest",
         json={
             "topic": "t/acme/s/jkt/d/gw-01/telemetry",
@@ -23,8 +40,8 @@ async def test_ingest_telemetry_numeric_metrics(client, ch_client, flush_buffers
     assert rows[1] == ("acme", "jkt", "gw-01", "temp", 25.5)
 
 
-async def test_ingest_telemetry_payload_as_json_string(client, ch_client, flush_buffers):
-    resp = await client.post(
+async def test_ingest_telemetry_payload_as_json_string(ingest_client, ch_client, flush_buffers):
+    resp = await ingest_client.post(
         "/ingest",
         json={
             "topic": "t/acme/s/jkt/d/gw-01/telemetry",
@@ -38,8 +55,8 @@ async def test_ingest_telemetry_payload_as_json_string(client, ch_client, flush_
     assert rows == [("pressure", 1013.25)]
 
 
-async def test_ingest_status(client, ch_client, flush_buffers):
-    resp = await client.post(
+async def test_ingest_status(ingest_client, ch_client, flush_buffers):
+    resp = await ingest_client.post(
         "/ingest",
         json={"topic": "t/acme/s/jkt/d/gw-01/status", "payload": {"status": "online"}},
     )
@@ -52,35 +69,35 @@ async def test_ingest_status(client, ch_client, flush_buffers):
     assert rows == [("acme", "jkt", "gw-01", "online")]
 
 
-async def test_ingest_status_missing_status_field_rejected(client, ch_client):
-    resp = await client.post(
+async def test_ingest_status_missing_status_field_rejected(ingest_client, ch_client):
+    resp = await ingest_client.post(
         "/ingest",
         json={"topic": "t/acme/s/jkt/d/gw-01/status", "payload": {"foo": "bar"}},
     )
     assert resp.status_code == 400
 
 
-async def test_ingest_invalid_topic_rejected(client, ch_client):
-    resp = await client.post("/ingest", json={"topic": "not-a-valid-topic", "payload": {"temp": 1}})
+async def test_ingest_invalid_topic_rejected(ingest_client, ch_client):
+    resp = await ingest_client.post("/ingest", json={"topic": "not-a-valid-topic", "payload": {"temp": 1}})
     assert resp.status_code == 400
 
 
-async def test_ingest_invalid_payload_rejected(client, ch_client):
-    resp = await client.post(
+async def test_ingest_invalid_payload_rejected(ingest_client, ch_client):
+    resp = await ingest_client.post(
         "/ingest", json={"topic": "t/acme/s/jkt/d/gw-01/telemetry", "payload": "not-json-{{{"}
     )
     assert resp.status_code == 400
 
 
-async def test_ingest_unsupported_topic_suffix_rejected(client, ch_client):
-    resp = await client.post(
+async def test_ingest_unsupported_topic_suffix_rejected(ingest_client, ch_client):
+    resp = await ingest_client.post(
         "/ingest", json={"topic": "t/acme/s/jkt/d/gw-01/cmd", "payload": {"foo": "bar"}}
     )
     assert resp.status_code == 400
 
 
-async def test_ingest_telemetry_ignores_non_numeric_fields(client, ch_client, flush_buffers):
-    resp = await client.post(
+async def test_ingest_telemetry_ignores_non_numeric_fields(ingest_client, ch_client, flush_buffers):
+    resp = await ingest_client.post(
         "/ingest",
         json={
             "topic": "t/acme/s/jkt/d/gw-01/telemetry",
@@ -95,13 +112,13 @@ async def test_ingest_telemetry_ignores_non_numeric_fields(client, ch_client, fl
     assert rows == [("temp",)]
 
 
-async def test_ingest_batch_flush_on_size_threshold(client, ch_client, flush_buffers, monkeypatch):
+async def test_ingest_batch_flush_on_size_threshold(ingest_client, ch_client, flush_buffers, monkeypatch):
     from app.buffer import telemetry_buffer
 
     monkeypatch.setattr(telemetry_buffer, "_batch_size", 3)
 
     for i in range(3):
-        resp = await client.post(
+        resp = await ingest_client.post(
             "/ingest",
             json={"topic": "t/acme/s/jkt/d/gw-01/telemetry", "payload": {"counter": i}},
         )

@@ -1,53 +1,35 @@
+"use client";
 
-'use client'
-
-import { useTheme } from 'next-themes';
-import Image from "next/image";
+import React from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSidebar } from "@/components/ui/sidebar";
+import GaungnusaLogo, { GaungnusaIcon } from "./gaungnusa-logo";
 
-import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
-import { cn } from '@/lib/utils';
-import LogoIcon from '@/public/assets/images/logo-icon.png';
-import LogoWhite from '@/public/assets/images/logo-light.png';
-import LogoDark from '@/public/assets/images/logo.png';
-
-function LogoSidebar() {
-  const { theme } = useTheme()
-  const isCollapsed = useSidebarCollapsed();
-
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  // Don't render until mounted to avoid hydration mismatch or wrong theme
-  if (!isMounted) return null;
+export default function LogoSidebar() {
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
 
   return (
-    <Link
-      href="/dashboard"
-      className={cn(
-        'sidebar-logo h-[72px] py-3.5 flex items-center justify-center border-b border-neutral-100 dark:border-slate-700',
-        isCollapsed ? 'px-1' : 'px-4'
-      )}
+    <div
+      className={`flex h-16 items-center border-b border-neutral-200 dark:border-zinc-800/80 transition-all duration-200 ${
+        isCollapsed ? "justify-center px-2" : "px-4"
+      }`}
     >
-      <Image
-        src={
-          isCollapsed
-            ? LogoIcon
-            : theme === 'dark'
-              ? LogoWhite
-              : LogoDark
-        }
-        alt="Logo"
-        width={isCollapsed ? 44 : 168}
-        height={40}
-        priority
-      />
-    </Link>
-  )
+      <Link
+        href="/dashboard"
+        className={`flex items-center gap-3 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 rounded ${
+          isCollapsed ? "justify-center w-full" : "w-full"
+        }`}
+        title="Gaungnusa Dashboard"
+      >
+        {isCollapsed ? (
+          <div className="flex items-center justify-center">
+            <GaungnusaIcon size={28} />
+          </div>
+        ) : (
+          <GaungnusaLogo size={32} showTagline={true} />
+        )}
+      </Link>
+    </div>
+  );
 }
-
-export default LogoSidebar

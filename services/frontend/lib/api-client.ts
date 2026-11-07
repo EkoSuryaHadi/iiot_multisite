@@ -5,6 +5,9 @@ import type {
   DeviceStatusListResponse,
   Site,
   SiteSummary,
+  SpsDailyEnergyResponse,
+  SpsHealthResponse,
+  SpsPerformanceResponse,
   Tenant,
   TelemetryResponse,
   TenantSummary,
@@ -89,8 +92,11 @@ export const sitesApi = {
 // --- Devices ---
 export const devicesApi = {
   list: () => dm.get<Device[]>("/devices"),
+  listPending: () => dm.get<Device[]>("/devices/pending"),
   create: (data: { device_key: string; name: string; site_id: string; tenant_id?: string }) =>
     dm.post<Device>("/devices", data),
+  claim: (id: string, data: { name: string; site_id: string; tenant_id?: string }) =>
+    dm.post<Device>(`/devices/${id}/claim`, data),
   update: (id: string, data: { name?: string; is_active?: boolean }) => dm.patch<Device>(`/devices/${id}`, data),
   remove: (id: string) => dm.delete<void>(`/devices/${id}`),
   provisionCredentials: (id: string) => dm.post<DeviceCredential>(`/devices/${id}/credentials`),
@@ -133,4 +139,27 @@ export const analyticsApi = {
 
   getSummarySite: (params: { site_slug: string; tenant_slug?: string; start?: string; end?: string }) =>
     an.get<SiteSummary>("/summary/site", params),
+}
+
+// --- Mitratel SPS On-Grid (GTaaS) ---
+export const spsApi = {
+  getPerformance: (
+    siteSlug: string,
+    params?: { tenant_slug?: string; start?: string; end?: string }
+  ) => an.get<SpsPerformanceResponse>(`/sps/sites/${siteSlug}/performance`, params),
+
+  getHealth: (
+    siteSlug: string,
+    params?: { tenant_slug?: string; start?: string; end?: string }
+  ) => an.get<SpsHealthResponse>(`/sps/sites/${siteSlug}/health`, params),
+
+  getDaily: (
+    siteSlug: string,
+    params?: {
+      tenant_slug?: string
+      start_date?: string
+      end_date?: string
+      limit?: number
+    }
+  ) => an.get<SpsDailyEnergyResponse>(`/sps/sites/${siteSlug}/daily`, params),
 }

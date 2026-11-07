@@ -18,11 +18,13 @@ import {
 import { useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
 import type { UserRole } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { ChevronRight, type LucideIcon } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import React, { useState } from "react";
+
+type LucideIcon = React.ComponentType<any>;
 
 interface SidebarItem {
   title?: string;
@@ -83,7 +85,7 @@ export function NavMain({ items }: { items: SidebarItem[] }) {
                           : ""
                       )}
                     >
-                      {item.icon && <item.icon className="!w-4.5 !h-4.5" />}
+                      {item.icon && <item.icon className="w-4.5! h-4.5!" />}
                       <span>{item.title}</span>
                       <ChevronRight className="ms-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
@@ -150,7 +152,7 @@ export function NavMain({ items }: { items: SidebarItem[] }) {
                   )}
                 >
                   <Link href={item.url} className="flex items-center gap-2">
-                    {item.icon && <item.icon className="!w-4.5 !h-4.5" />}
+                    {item.icon && <item.icon className="w-4.5! h-4.5!" />}
                     <span>{item.title}</span>
                   </Link>
                 </SidebarMenuButton>

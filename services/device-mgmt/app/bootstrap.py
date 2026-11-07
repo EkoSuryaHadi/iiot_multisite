@@ -21,18 +21,17 @@ def main() -> None:
     try:
         existing = db.scalar(select(User).where(User.tenant_id.is_(None), User.email == email))
         if existing:
-            print(f"Superadmin '{email}' sudah ada, tidak ada perubahan.")
-            return
-
-        user = User(
-            tenant_id=None,
-            email=email,
-            hashed_password=hash_secret(password),
-            role=Role.SUPERADMIN,
-        )
-        db.add(user)
-        db.commit()
-        print(f"Superadmin '{email}' berhasil dibuat.")
+            print(f"Superadmin '{email}' sudah ada, tidak ada perubahan di Postgres.")
+        else:
+            user = User(
+                tenant_id=None,
+                email=email,
+                hashed_password=hash_secret(password),
+                role=Role.SUPERADMIN,
+            )
+            db.add(user)
+            db.commit()
+            print(f"Superadmin '{email}' berhasil dibuat di Postgres.")
     finally:
         db.close()
 

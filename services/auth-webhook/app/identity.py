@@ -1,9 +1,11 @@
+import hashlib
 import hmac
 from dataclasses import dataclass
 from typing import Literal
 
 from sqlalchemy.orm import Session
 
+from app.cache import verified_password_cache
 from app.config import settings
 from app.lookup import find_device_by_client_id, find_user_by_email
 from app.models import Role
@@ -22,6 +24,19 @@ class Identity:
     role: Role | None = None
 
 
+def _verify_cached(subject_key: str, plain_password: str, hashed_password: str) -> bool:
+    """Hindari komputasi ulang bcrypt (~60-100ms) selama pasangan (plain, hashed) masih sama di dalam TTL."""
+    candidate_digest = hashlib.sha256(f"{hashed_password}:{plain_password}".encode("utf-8")).hexdigest()
+    cached_digest = verified_password_cache.get_or_set(subject_key, lambda: None)
+    if cached_digest is not None and hmac.compare_digest(cached_digest, candidate_digest):
+        return True
+    if verify_secret(plain_password, hashed_password):
+        verified_password_cache.invalidate(subject_key)
+        verified_password_cache.get_or_set(subject_key, lambda: candidate_digest)
+        return True
+    return False
+
+
 def authenticate(db: Session, username: str | None, password: str | None) -> Identity | None:
     """Autentikasi 3 skenario: service internal (superuser), device, dan user dashboard."""
     if not username or password is None:
@@ -38,7 +53,7 @@ def authenticate(db: Session, username: str | None, password: str | None) -> Ide
     if device_row is not None:
         if not (device_row.device_active and device_row.site_active and device_row.tenant_active):
             return None
-        if not verify_secret(password, device_row.hashed_password):
+        if not _verify_cached(f"dev:{username}", password, device_row.hashed_password):
             return None
         return Identity(
             kind="device",
@@ -51,7 +66,7 @@ def authenticate(db: Session, username: str | None, password: str | None) -> Ide
     # 3. User dashboard (username = email, password sama dengan login device-mgmt).
     user_row = find_user_by_email(db, username)
     if user_row is not None:
-        if not verify_secret(password, user_row.hashed_password):
+        if not _verify_cached(f"usr:{username}", password, user_row.hashed_password):
             return None
         return Identity(
             kind="user",

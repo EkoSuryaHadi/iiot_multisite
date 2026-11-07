@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { useAutoRefresh } from "@/contexts/AutoRefreshContext";
 import { useTenantContext } from "@/contexts/TenantContext";
 import { analyticsApi, ApiRequestError } from "@/lib/api-client";
 import { Activity, Server, WifiOff, Zap } from "lucide-react";
@@ -18,6 +19,7 @@ interface CardData {
 
 const StatCard = () => {
   const { isSuperadmin, selectedTenantSlug } = useTenantContext();
+  const { refreshTrigger } = useAutoRefresh();
   const [loading, setLoading] = useState(true);
   const [deviceCount, setDeviceCount] = useState(0);
   const [onlineCount, setOnlineCount] = useState(0);
@@ -25,7 +27,10 @@ const StatCard = () => {
   const [metricCount, setMetricCount] = useState(0);
 
   useEffect(() => {
-    if (isSuperadmin && !selectedTenantSlug) return;
+    if (isSuperadmin && !selectedTenantSlug) {
+      setLoading(false);
+      return;
+    }
 
     let active = true;
     setLoading(true);
@@ -47,7 +52,7 @@ const StatCard = () => {
     return () => {
       active = false;
     };
-  }, [isSuperadmin, selectedTenantSlug]);
+  }, [isSuperadmin, selectedTenantSlug, refreshTrigger]);
 
   const cardsDatas: CardData[] = [
     {
@@ -89,7 +94,7 @@ const StatCard = () => {
       {cardsDatas.map((card, index) => (
         <Card
           key={index}
-          className={`bg-gradient-to-r ${card.gradientFrom} to-white dark:to-slate-700 p-0 border border-gray-200 dark:border-neutral-700 rounded-md shadow-none`}
+          className={`bg-linear-to-r ${card.gradientFrom} to-white dark:to-slate-700 p-0 border border-gray-200 dark:border-neutral-700 rounded-md shadow-none`}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">

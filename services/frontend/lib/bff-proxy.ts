@@ -22,12 +22,18 @@ export async function proxyToBackend(
   const url = new URL(`${baseUrl}/${path.join("/")}`)
   url.search = req.nextUrl.search
 
+  const forwardedFor = req.headers.get("x-forwarded-for")
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${session.accessToken}`,
+    "Content-Type": "application/json",
+  }
+  if (forwardedFor) {
+    headers["X-Forwarded-For"] = forwardedFor
+  }
+
   const init: RequestInit = {
     method: req.method,
-    headers: {
-      Authorization: `Bearer ${session.accessToken}`,
-      "Content-Type": "application/json",
-    },
+    headers,
   }
 
   if (!["GET", "HEAD"].includes(req.method)) {

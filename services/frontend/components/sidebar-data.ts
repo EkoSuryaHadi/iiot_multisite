@@ -2,6 +2,7 @@ import type { UserRole } from "@/lib/types";
 import {
   Activity,
   Building2,
+  FileSpreadsheet,
   House,
   MapPin,
   Server,
@@ -35,6 +36,11 @@ export const data = {
       title: "Telemetry",
       url: "/telemetry",
       icon: Activity,
+    },
+    {
+      title: "Efficiency Sharing",
+      url: "/reports/efficiency-sharing",
+      icon: FileSpreadsheet,
     },
     {
       title: "Users",

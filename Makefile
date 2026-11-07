@@ -1,4 +1,4 @@
-.PHONY: up down restart ps logs health e2e simulate
+.PHONY: up down restart ps logs health e2e simulate prod-up prod-down prod-ps prod-logs prod-bootstrap
 
 up:
 	docker compose up -d
@@ -17,6 +17,22 @@ logs:
 
 health:
 	docker compose ps --format '{{.Name}}: {{.Status}}'
+
+# === Target Produksi (Single VPS - docker-compose.prod.yml) ===
+prod-up:
+	docker compose -f docker-compose.prod.yml up -d --build
+
+prod-down:
+	docker compose -f docker-compose.prod.yml down
+
+prod-ps:
+	docker compose -f docker-compose.prod.yml ps
+
+prod-logs:
+	docker compose -f docker-compose.prod.yml logs -f
+
+prod-bootstrap:
+	docker compose -f docker-compose.prod.yml exec device-mgmt python -m app.bootstrap
 
 # Jalankan tes integrasi E2E (Fase 7) terhadap stack yang sedang up.
 # Prasyarat: `make up` dan superadmin sudah di-bootstrap (lihat services/device-mgmt/app/bootstrap.py).

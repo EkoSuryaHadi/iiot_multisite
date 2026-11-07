@@ -73,3 +73,54 @@ def test_internal_service_can_access_anything(client):
 def test_unknown_identity_denied(client):
     resp = client.post("/authz", json={"username": "ghost@nowhere.dev", "topic": "t/x/s/y/d/z/telemetry", "action": "subscribe"})
     assert resp.json()["result"] == "deny"
+
+
+def _add_device(db_session, tenant, site, key):
+    import uuid
+
+    from app.models import Device
+
+    d = Device(id=uuid.uuid4(), tenant_id=tenant.id, site_id=site.id, device_key=key, is_active=True)
+    db_session.add(d)
+    db_session.commit()
+    return d
+
+
+def test_gateway_can_publish_data_topic_for_registered_sibling_device(
+    client, db_session, device_a, tenant_a, site_a
+):
+    _add_device(db_session, tenant_a, site_a, "G001")
+    client_id = f"{tenant_a.slug}-{site_a.slug}-dev-1"
+    resp = client.post(
+        "/authz",
+        json={"username": client_id, "topic": "data/SolarMonitoringMQTT/SolarMonitoringPoC/G001", "action": "publish"},
+    )
+    assert resp.json()["result"] == "allow"
+
+
+def test_gateway_cannot_publish_data_topic_for_unregistered_device(client, device_a, tenant_a, site_a):
+    client_id = f"{tenant_a.slug}-{site_a.slug}-dev-1"
+    resp = client.post(
+        "/authz",
+        json={"username": client_id, "topic": "data/SolarMonitoringMQTT/SolarMonitoringPoC/NOPE", "action": "publish"},
+    )
+    assert resp.json()["result"] == "deny"
+
+
+def test_gateway_cannot_publish_data_topic_for_other_tenant_device(
+    client, db_session, device_a, tenant_a, tenant_b, site_a
+):
+    import uuid
+
+    from app.models import Site
+
+    other_site = Site(id=uuid.uuid4(), tenant_id=tenant_b.id, slug="site-1", is_active=True)
+    db_session.add(other_site)
+    db_session.commit()
+    _add_device(db_session, tenant_b, other_site, "G999")
+    client_id = f"{tenant_a.slug}-{site_a.slug}-dev-1"
+    resp = client.post(
+        "/authz",
+        json={"username": client_id, "topic": "data/SolarMonitoringMQTT/SolarMonitoringPoC/G999", "action": "publish"},
+    )
+    assert resp.json()["result"] == "deny"

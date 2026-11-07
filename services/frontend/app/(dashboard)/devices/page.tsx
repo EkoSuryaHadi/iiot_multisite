@@ -3,6 +3,7 @@
 import DashboardBreadcrumb from "@/components/layout/dashboard-breadcrumb";
 import RoleGate from "@/components/shared/role-gate";
 import TenantSelector from "@/components/shared/tenant-selector";
+import { MqttSetupDialog } from "@/components/devices/mqtt-setup-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,8 +34,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useTenantContext } from "@/contexts/TenantContext";
-import { ApiRequestError, devicesApi, sitesApi } from "@/lib/api-client";
-import type { Device, DeviceCredential, Site } from "@/lib/types";
+import { useAutoRefresh } from "@/contexts/AutoRefreshContext";
+import { ApiRequestError, devicesApi, sitesApi, analyticsApi } from "@/lib/api-client";
+import type { Device, DeviceCredential, DeviceStatusItem, Site } from "@/lib/types";
+import { formatTimeAgo, StatusPulse } from "@/components/shared/status-pulse";
 import { Copy, KeyRound, Loader2, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -192,8 +195,10 @@ function CredentialResultDialog({
 
 function DevicesPageContent() {
   const { isSuperadmin, selectedTenant } = useTenantContext();
+  const { refreshTrigger } = useAutoRefresh();
   const [devices, setDevices] = useState<Device[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
+  const [deviceStatuses, setDeviceStatuses] = useState<Record<string, DeviceStatusItem>>({});
   const [loading, setLoading] = useState(true);
   const [credential, setCredential] = useState<DeviceCredential | null>(null);
   const [provisioningId, setProvisioningId] = useState<string | null>(null);
@@ -201,10 +206,34 @@ function DevicesPageContent() {
   const siteNameById = (id: string) => sites.find((s) => s.id === id)?.name ?? id;
 
   const load = useCallback(async () => {
-    if (isSuperadmin && !selectedTenant) return;
+    if (isSuperadmin && !selectedTenant) {
+      setDevices([]);
+      setSites([]);
+      setDeviceStatuses({});
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const [allDevices, allSites] = await Promise.all([devicesApi.list(), sitesApi.list()]);
+      const [allDevices, allSites, statusRes] = await Promise.all([
+        devicesApi.list(),
+        sitesApi.list(),
+        analyticsApi
+          .getDevicesStatus({
+            tenant_slug: isSuperadmin ? selectedTenant?.slug : undefined,
+            limit: 100,
+          })
+          .catch(() => null),
+      ]);
+
+      const statusMap: Record<string, DeviceStatusItem> = {};
+      if (statusRes?.devices) {
+        for (const item of statusRes.devices) {
+          statusMap[item.device_key] = item;
+        }
+      }
+      setDeviceStatuses(statusMap);
+
       if (isSuperadmin && selectedTenant) {
         setDevices(allDevices.filter((d) => d.tenant_id === selectedTenant.id));
         setSites(allSites.filter((s) => s.tenant_id === selectedTenant.id));
@@ -221,7 +250,7 @@ function DevicesPageContent() {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshTrigger]);
 
   const toggleActive = async (device: Device) => {
     try {
@@ -272,6 +301,8 @@ function DevicesPageContent() {
         <CardContent className="px-0">
           {loading ? (
             <p className="text-sm text-neutral-500 px-6">Memuat...</p>
+          ) : isSuperadmin && !selectedTenant ? (
+            <p className="text-sm text-neutral-500 px-6">Pilih atau buat tenant terlebih dahulu untuk melihat daftar device.</p>
           ) : devices.length === 0 ? (
             <p className="text-sm text-neutral-500 px-6">Belum ada device. Buat site terlebih dahulu bila belum ada.</p>
           ) : (
@@ -292,16 +323,33 @@ function DevicesPageContent() {
                     <TableCell>{device.name}</TableCell>
                     <TableCell>{siteNameById(device.site_id)}</TableCell>
                     <TableCell>
-                      <Badge className={device.is_active ? "bg-green-600 text-white" : "bg-neutral-400 text-white"}>
-                        {device.is_active ? "aktif" : "nonaktif"}
-                      </Badge>
+                      {!device.is_active ? (
+                        <StatusPulse status="nonaktif" />
+                      ) : (
+                        <div className="flex flex-col gap-0.5">
+                          <StatusPulse
+                            status={deviceStatuses[device.device_key]?.status === "online" ? "online" : "offline"}
+                          />
+                          {deviceStatuses[device.device_key]?.last_seen && (
+                            <span className="text-[10px] text-neutral-400">
+                              {formatTimeAgo(deviceStatuses[device.device_key].last_seen)}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end items-center gap-2">
+                        <MqttSetupDialog
+                          device={device}
+                          site={sites.find((s) => s.id === device.site_id)}
+                          tenantSlug={selectedTenant?.slug}
+                        />
                         <RoleGate allow={["superadmin", "tenant_admin", "operator"]}>
                           <Button
                             variant="outline"
                             size="sm"
+                            title="Generate Kunci / Secret MQTT"
                             disabled={provisioningId === device.id}
                             onClick={() => handleProvision(device)}
                           >

@@ -209,7 +209,7 @@
   .apexcharts-tooltip.apexcharts-theme-light {
     @apply bg-white dark:bg-neutral-600 border-neutral-300 dark:border-neutral-500;
     .apexcharts-tooltip-title {
-      @apply bg-neutral-600 dark:bg-neutral-500 border-b-[1px] border-neutral-300 dark:border-neutral-400;
+      @apply bg-neutral-600 dark:bg-neutral-500 border-b border-neutral-300 dark:border-neutral-400;
     }
   }
 
@@ -219,7 +219,7 @@
   }
 
   .apexcharts-yaxis {
-    @apply translate-x-[10px];
+    @apply translate-x-2.5;
   }
 
   .remove-tooltip-title .apexcharts-tooltip-title {
@@ -271,14 +271,14 @@
   }
 
   .donutChart {
-    @apply h-0 min-h-[163px] -mt-[32px];
+    @apply h-0 min-h-40.75 -mt-8;
   }
   .donutChart {
     min-height: 163px !important;
   }
 
   .margin-16-minus {
-    @apply -m-[16px];
+    @apply -m-4;
   }
 
   #semiCircleGauge {
@@ -350,7 +350,7 @@
 }
 
 .tooltip-arrow-white .bg-primary {
-  @apply bg-[#fff] fill-[#fff];
+  @apply bg-white fill-white;
 }
 .dark .tooltip-arrow-white .bg-primary {
   @apply bg-[#1e2939] fill-[#1e2939];
@@ -371,7 +371,7 @@
   }
 
   .avatar-upload.style-two {
-    @apply h-[150px] w-[180px] max-w-none;
+    @apply h-37.5 w-45 max-w-none;
   }
 
   #imagePreview {
@@ -384,11 +384,11 @@
   }
 
   .avatar-upload .avatar-preview {
-    @apply relative h-[150px] w-[150px] rounded-full border border-[#487FFF] shadow-md;
+    @apply relative h-37.5 w-37.5 rounded-full border border-[#487FFF] shadow-md;
   }
 
   .avatar-upload .avatar-preview.style-two {
-    @apply h-[120px] w-[120px] rounded border border-gray-300 shadow-none;
+    @apply h-30 w-30 rounded border border-gray-300 shadow-none;
   }
 
   .avatar-upload .avatar-preview.style-two > div {
@@ -431,55 +431,10 @@
 }
 /* ======================================== Custom Classes css End ======================================== */
 
-/* ======================================= Layout Css Start ================================== */
-/* Helium layout css start */
-html[layout="helium"] body {
-  @apply bg-neutral-50 dark:bg-slate-900;
-}
-html[layout="helium"] .dashboard-sidebar-container {
-  @apply border border-neutral-200 dark:border-slate-600 overflow-hidden m-5 rounded-[8px];
-}
 
-html[layout="helium"] .dashboard-body-wrapper {
-  @apply p-5 ps-10;
-}
-
-html[layout="helium"] .dashboard-body {
-  @apply px-0 bg-transparent;
-}
-
-html[layout="helium"] .dashboard-header-wrapper {
-  @apply !shadow-none;
-}
-
-html[layout="helium"] .dashboard-header {
-  @apply border border-neutral-200 dark:border-slate-600 rounded-[8px] !shadow-none;
-}
-html[layout="helium"] .d-footer {
-  @apply rounded-[8px];
-}
-html[layout="helium"] .dashboard-sidebar-container {
-  height: calc(100vh - 40px);
-}
-/* Helium layout css End */
-
-/* Boron layout css start */
-html[layout="boron"] .dashboard-header-wrapper {
-  @apply fixed w-full start-0 top-0;
-}
-
-html[layout="boron"] .dashboard-sidebar-inner,
-html[layout="boron"] .dashboard-body {
-  @apply mt-[72px];
-}
-
-html[layout="boron"] .dashboard-sidebar-container {
-  height: calc(100vh - 72px);
-}
-/* Boron layout css End */
 
 .gradient-bg-chart::before {
-  @apply absolute w-full h-[106px] blur-[25px] -z-[1] content-[''] bottom-0;
+  @apply absolute w-full h-26.5 blur-[25px] -z-1 content-[''] bottom-0;
   background: linear-gradient(
     90deg,
     rgba(156, 43, 255, 0.15) 0%,

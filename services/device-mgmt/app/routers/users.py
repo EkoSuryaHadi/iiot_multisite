@@ -44,6 +44,7 @@ def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
+
     return user
 
 
@@ -83,6 +84,7 @@ def update_user(
 
     db.commit()
     db.refresh(user)
+
     return user
 
 

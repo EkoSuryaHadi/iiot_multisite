@@ -14,6 +14,14 @@ export interface Site {
   slug: string
   name: string
   is_active: boolean
+  site_type?: string | null
+  pv_capacity_kwp?: number | null
+  mppt_capacity_a?: number | null
+  rectifier_float_voltage?: number | null
+  baseline_kwh_daily?: number | null
+  latitude?: number | null
+  longitude?: number | null
+  tower_type?: string | null
   created_at: string
 }
 
@@ -24,6 +32,7 @@ export interface Device {
   device_key: string
   name: string
   is_active: boolean
+  registration_status?: "active" | "pending"
   created_at: string
 }
 
@@ -68,7 +77,7 @@ export interface DeviceStatusItem {
   site_slug: string
   device_key: string
   status: "online" | "offline"
-  last_seen: string
+  last_seen: string | null
 }
 
 export interface DeviceStatusListResponse {
@@ -100,4 +109,132 @@ export interface SiteSummary extends TenantSummary {
 
 export interface ApiError {
   detail: string | { msg: string }[]
+}
+
+export type AlarmSeverity = "critical" | "warning" | "info"
+
+export interface AlarmItem {
+  id: string
+  title: string
+  message: string
+  severity: AlarmSeverity
+  source: string
+  metric_name?: string
+  value?: number
+  threshold?: number
+  timestamp: string
+}
+
+// --- Mitratel SPS On-Grid (GTaaS) Types ---
+export interface SpsPowerFlow {
+  irradiance: number
+  v_pv: number
+  i_pv: number
+  p_pv: number
+  v_mppt_out: number
+  i_mppt_out: number
+  p_mppt_out: number
+  v_busbar: number
+  /** Tegangan AC sisi PLN/rectifier (V). 0 bila sensor tidak melaporkan. */
+  v_pln?: number
+  /** Frekuensi AC PLN (Hz). 0 bila sensor tidak melaporkan. */
+  freq_pln?: number
+  i_rectifier: number
+  p_rectifier: number
+  p_load: number
+  temp_mppt: number
+  rectifier_float_voltage: number
+  voltage_delta_v: number
+  load_sharing_active: boolean
+}
+
+export interface SpsSensorMetric {
+  metric_name: string
+  latest_value: number
+  avg_value: number
+  max_value?: number
+  last_seen?: string | null
+  device_key?: string
+}
+
+export interface SpsPmsStatus {
+  power_source: "DC_MAINS" | "INTERNAL_UPS" | "OFFLINE"
+  battery_voltage: number
+  battery_pct: number
+  ups_hours_remaining: number
+  signal_rssi?: number | null
+  firmware_version: string
+  ota_status: "UP_TO_DATE" | "UPDATE_AVAILABLE" | "UPDATING"
+}
+
+export interface SpsPerformanceResponse {
+  tenant_slug: string
+  site_slug: string
+  is_online?: boolean
+  last_seen?: string | null
+  site_config: {
+    site_type: string
+    site_name?: string
+    pv_capacity_kwp: number
+    mppt_capacity_a: number
+    rectifier_float_voltage: number
+    baseline_kwh_daily: number
+  }
+  solar_kwh: number
+  grid_kwh: number
+  load_kwh: number
+  solar_contribution_pct: number
+  performance_ratio_pct: number
+  pln_cost_avoided_idr: number
+  carbon_avoided_kg: number
+  trees_equivalent: number
+  power_flow: SpsPowerFlow
+  pms_status?: SpsPmsStatus
+  sensor_metrics?: SpsSensorMetric[]
+}
+
+export interface SpsPvHealth {
+  health_index: number
+  status: "HEALTHY" | "WARNING" | "DEGRADED"
+  performance_ratio_pct: number
+  string_anomaly: boolean
+  max_string_deviation_pct: number
+  string_currents: number[]
+}
+
+export interface SpsMpptHealth {
+  health_index: number
+  status: "HEALTHY" | "WARNING" | "CRITICAL"
+  efficiency_pct: number
+  is_efficiency_ok: boolean
+  temp_mppt_c: number
+  is_temperature_ok: boolean
+  voltage_delta_v: number | null
+  load_sharing_active: boolean
+}
+
+export interface SpsHealthResponse {
+  tenant_slug: string
+  site_slug: string
+  site_health_index: number
+  status: "HEALTHY" | "WARNING" | "CRITICAL" | "DEGRADED"
+  pv_health: SpsPvHealth
+  mppt_health: SpsMpptHealth
+}
+
+export interface SpsDailyEnergyRecord {
+  date: string
+  solar_kwh: number
+  grid_kwh: number
+  load_kwh: number
+  solar_contribution_pct: number
+  performance_ratio_pct: number
+  updated_at: string
+}
+
+export interface SpsDailyEnergyResponse {
+  tenant_slug: string
+  site_slug: string
+  records: SpsDailyEnergyRecord[]
+  total: number
 }

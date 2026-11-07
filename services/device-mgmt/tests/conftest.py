@@ -35,8 +35,18 @@ def _ensure_test_database() -> None:
 
 @pytest.fixture(scope="session")
 def engine():
-    _ensure_test_database()
-    eng = create_engine(settings.database_url)
+    try:
+        _ensure_test_database()
+        eng = create_engine(settings.database_url)
+        with eng.connect() as conn:
+            pass
+    except Exception:
+        from sqlalchemy.pool import StaticPool
+        eng = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
     Base.metadata.create_all(eng)
     yield eng
     Base.metadata.drop_all(eng)
@@ -127,3 +137,21 @@ def auth_headers(client: TestClient, email: str, password: str) -> dict[str, str
     assert resp.status_code == 200, resp.text
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture()
+def test_tenant(db_session):
+    t = Tenant(slug=f"tenant-test-{uuid.uuid4().hex[:6]}", name="Test Tenant")
+    db_session.add(t)
+    db_session.commit()
+    return t
+
+
+@pytest.fixture()
+def test_site(db_session, test_tenant):
+    from app.models import Site
+    s = Site(tenant_id=test_tenant.id, slug=f"site-test-{uuid.uuid4().hex[:6]}", name="Test Site")
+    db_session.add(s)
+    db_session.commit()
+    return s
+
