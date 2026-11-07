@@ -108,7 +108,14 @@ def site_a(db_session, tenant_a):
 
 @pytest.fixture()
 def device_a(db_session, tenant_a, site_a):
-    device = Device(id=uuid.uuid4(), tenant_id=tenant_a.id, site_id=site_a.id, device_key="dev-1", is_active=True)
+    device = Device(
+        id=uuid.uuid4(),
+        tenant_id=tenant_a.id,
+        site_id=site_a.id,
+        device_key="dev-1",
+        name="Device A",
+        is_active=True,
+    )
     db_session.add(device)
     db_session.flush()
 

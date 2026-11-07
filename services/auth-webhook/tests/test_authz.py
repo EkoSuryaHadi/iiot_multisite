@@ -80,7 +80,14 @@ def _add_device(db_session, tenant, site, key):
 
     from app.models import Device
 
-    d = Device(id=uuid.uuid4(), tenant_id=tenant.id, site_id=site.id, device_key=key, is_active=True)
+    d = Device(
+        id=uuid.uuid4(),
+        tenant_id=tenant.id,
+        site_id=site.id,
+        device_key=key,
+        name=f"Test {key}",
+        is_active=True,
+    )
     db_session.add(d)
     db_session.commit()
     return d

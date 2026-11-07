@@ -11,7 +11,7 @@ from app.ingest_logic import (
     resolve_timestamp,
 )
 from app.schemas import IngestRequest, IngestResponse
-from app.topics import STATUS_SUFFIX, TELEMETRY_SUFFIX, parse_device_topic
+from app.topics import STATUS_SUFFIX, TELEMETRY_SUFFIX, parse_device_topic_with_client
 
 router = APIRouter(tags=["ingest"])
 
@@ -28,7 +28,7 @@ async def ingest(
                 detail="Header X-Ingest-Secret tidak valid atau tidak disertakan",
             )
 
-    parsed_topic = parse_device_topic(payload.topic)
+    parsed_topic = parse_device_topic_with_client(payload.topic, payload.clientid)
     if parsed_topic is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Topik tidak valid: {payload.topic}")
 

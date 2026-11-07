@@ -8,6 +8,7 @@ from app.topics import (
     DEVICE_PUBLISHABLE_SUFFIXES,
     DEVICE_SUBSCRIBABLE_SUFFIXES,
     parse_device_topic,
+    parse_device_topic_lenient,
     tenant_topic_prefix,
 )
 
@@ -20,12 +21,22 @@ def decide(identity: Identity, topic: str, action: str, db: Session | None = Non
 
     if identity.kind == "device":
         parsed = parse_device_topic(topic)
+        if parsed is None or parsed.suffix in {"#", "+"}:
+            # Topik device baru/vendor sering tidak mengikuti konvensi ketat, dan subscribe
+            # berakhir dengan wildcard (`.../d/dev-1/#`) sehingga tidak boleh dianggap
+            # suffix harfiah "cmd" oleh parser ketat.
+            # Tafsirkan longgar, lalu tetap wajib milik device ini.
+            parsed = parse_device_topic_lenient(
+                topic,
+                device_key_hint=identity.device_key,
+                tenant_hint=identity.tenant_slug,
+                site_hint=identity.site_slug,
+            )
         if parsed is not None:
-            if (
-                parsed.tenant_slug == identity.tenant_slug
-                and parsed.site_slug == identity.site_slug
-                and parsed.device_key == identity.device_key
-            ):
+            tenant_ok = parsed.tenant_slug is None or parsed.tenant_slug == identity.tenant_slug
+            site_ok = parsed.site_slug is None or parsed.site_slug == identity.site_slug
+            device_ok = bool(identity.device_key) and parsed.device_key == identity.device_key
+            if tenant_ok and site_ok and device_ok:
                 if action == "publish":
                     return parsed.suffix in DEVICE_PUBLISHABLE_SUFFIXES
                 if action == "subscribe":

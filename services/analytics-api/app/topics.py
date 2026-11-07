@@ -40,28 +40,32 @@ def _lookup_device_slugs(device_key: str) -> tuple[str, str] | None:
     return tenant_slug_cache.get_or_set(f"dev_slugs:{device_key}", _query)
 
 
+def _normalize_suffix(raw: str) -> str:
+    return TELEMETRY_SUFFIX if raw == BUFFERED_SUFFIX else raw
+
+
 def parse_device_topic(topic: str) -> ParsedDeviceTopic | None:
-    parts = topic.split("/")
+    # Buang garis miring di awal/akhir: firmware vendor sering menulis "/tenant/site/device".
+    normalized = topic.strip("/")
+    parts = normalized.split("/") if normalized else []
 
     # Format standar IIoT: t/{tenant}/s/{site}/d/{device}/{suffix}
     if len(parts) == 7 and parts[0] == "t" and parts[2] == "s" and parts[4] == "d":
-        suffix = TELEMETRY_SUFFIX if parts[6] == BUFFERED_SUFFIX else parts[6]
         return ParsedDeviceTopic(
             tenant_slug=parts[1],
             site_slug=parts[3],
             device_key=parts[5],
-            suffix=suffix,
+            suffix=_normalize_suffix(parts[6]),
         )
 
     # Format topik khusus SPS: sps/{tenant}/{site}/{device}[/{suffix}]
     if parts and parts[0] == "sps" and len(parts) in (4, 5):
         raw_suffix = parts[4] if len(parts) == 5 else TELEMETRY_SUFFIX
-        suffix = TELEMETRY_SUFFIX if raw_suffix == BUFFERED_SUFFIX else raw_suffix
         return ParsedDeviceTopic(
             tenant_slug=parts[1],
             site_slug=parts[2],
             device_key=parts[3],
-            suffix=suffix,
+            suffix=_normalize_suffix(raw_suffix),
         )
 
     # Format Gateway Haiwell / IoT: data/{project}/{group}/{device_key}
@@ -76,4 +80,57 @@ def parse_device_topic(topic: str) -> ParsedDeviceTopic | None:
                 suffix=TELEMETRY_SUFFIX,
             )
 
+    # Format longgar: t/{tenant}/s/{site}/{device}[/{suffix}] — penanda "d" hilang
+    if len(parts) >= 5 and parts[0] == "t" and parts[2] == "s":
+        rest = parts[4:]
+        if rest and rest[0] == "d":
+            rest = rest[1:]
+        if len(rest) == 1:
+            return ParsedDeviceTopic(parts[1], parts[3], rest[0], TELEMETRY_SUFFIX)
+        if len(rest) == 2:
+            return ParsedDeviceTopic(parts[1], parts[3], rest[0], _normalize_suffix(rest[1]))
+
+    # Format tanpa penanda: {tenant}/{site}/{device}[/{suffix}] — wajib cocok dengan DB
+    if len(parts) in (3, 4) and parts[0] not in {"t", "sps", "data", "$SYS"}:
+        device_key = parts[2]
+        slugs = _lookup_device_slugs(device_key)
+        if slugs and (slugs[0], slugs[1]) == (parts[0], parts[1]):
+            raw_suffix = parts[3] if len(parts) == 4 else TELEMETRY_SUFFIX
+            return ParsedDeviceTopic(parts[0], parts[1], device_key, _normalize_suffix(raw_suffix))
+
     return None
+
+
+def _device_key_from_clientid(clientid: str) -> str | None:
+    """Client id device berbentuk `{tenant}-{site}-{device_key}` (mis. solar-jkt-GNIS_MockupUSR)."""
+    clean = clientid.split("/")[0].strip()
+    if not clean:
+        return None
+    if clean.count("-") >= 2:
+        return clean.split("-", 2)[-1]
+    return clean
+
+
+def parse_device_topic_with_client(topic: str, clientid: str | None = None) -> ParsedDeviceTopic | None:
+    """parse_device_topic + cadangan untuk topik legacy vendor (UpTopic_*, SubTop*) yang
+    identitas device-nya hanya bisa diambil dari client id koneksi."""
+    parsed = parse_device_topic(topic)
+    if parsed is not None or not clientid:
+        return parsed
+    head = topic.strip("/").split("/")[0].lower()
+    is_up = head.startswith("uptopic") or head.startswith("up_topic")
+    is_sub = head.startswith("subtop") or head.startswith("sub_topic")
+    if not (is_up or is_sub):
+        return None
+    device_key = _device_key_from_clientid(clientid)
+    if not device_key:
+        return None
+    slugs = _lookup_device_slugs(device_key)
+    if not slugs:
+        return None
+    return ParsedDeviceTopic(
+        tenant_slug=slugs[0],
+        site_slug=slugs[1],
+        device_key=device_key,
+        suffix=TELEMETRY_SUFFIX if is_up else "cmd",
+    )
