@@ -830,3 +830,58 @@ Dengan 25.8 ini seharusnya tidak pernah terpicu — biarkan sebagai alarm.
   thread. Pakai satu writer thread / cache skema → churn turun drastis.
 - `device_last_seen ... FINAL` dipanggil ~350×/9 jam; ganti `FINAL` dengan `argMax` per device_key.
 - Buffer ingest masih in-memory (spool disk belum di-deploy dari dokumen bagian B1).
+
+---
+
+## I. STATUS DEVICE 3 TINGKAT (dari event koneksi broker) — 8 Nov 2026
+
+### I.1 Masalah
+Status di dashboard dihitung **hanya** dari `device_last_seen` (data masuk, ambang 300 detik).
+Akibatnya device yang **terhubung ke broker tapi belum mengirim angka** (sensor belum terpasang,
+payload `""`) tampil **offline** — menyesatkan saat commissioning: tim lapangan mengira device mati.
+
+### I.2 Yang diubah
+1. **Rule EMQX baru** `conn_online` + `conn_offline` (event `$events/client_connected` /
+   `$events/client_disconnected`) → action HTTP `analytics_api_conn_online` /
+   `analytics_api_conn_offline` → `POST /ingest/connection`.
+2. **Endpoint baru** `POST /ingest/connection` (`services/analytics-api/app/routers/ingest.py`):
+   memecah `username` `{tenant}-{site}-{device}` (maxsplit 2, jadi device_key boleh mengandung `-`),
+   menulis baris ke `device_status`. Username non-device (mis. `internal-service`) dijawab
+   `accepted=false` HTTP 200 agar rule tidak dihitung gagal.
+3. **`device_counts.py`**:
+   - `_CONNECTION_SQL` baru membaca `argMax(status, ts)` dari `device_status`.
+   - `resolve_device_states()` mengembalikan field baru `connection`: `connected` / `disconnected` / `null`.
+   - `_LAST_SEEN_SQL` **dipindah ke tabel `telemetry`** (bukan `device_last_seen`), karena
+     `device_last_seen_status_mv` ikut mencatat event koneksi sehingga device tanpa data tampak online.
+4. **Frontend**: `DeviceStatusItem.connection`, badge `StatusPulse` dapat prop `label`; halaman
+   `/devices` menampilkan tiga keadaan: hijau *online*, kuning *terhubung* (connect tapi belum ada
+   angka), abu *offline*.
+
+### I.3 Batasan yang perlu diketahui
+- EMQX build ini **tidak mendukung** `split()`, `nth()`, `re_match()`, `re_replace()`, `substring()`
+  (semua melempar `failed.exception`), jadi topik **tidak** dibangun di SQL — dipakai endpoint
+  khusus dengan body `{username, status, clientid, publish_received_at}`.
+- Device_key yang mengandung `-` aman di backend (maxsplit 2), tapi bila nanti perlu filter di SQL
+  EMQX hal itu tidak bisa dilakukan dengan fungsi string di atas.
+- Status koneksi mengikuti **username** device. Klien uji lapangan yang memakai client id
+  `...-debug` tetap terhitung device yang sama.
+
+### I.4 Verifikasi
+- `POST /ingest/connection` device → `{"accepted":true,"rows_buffered":1}`; non-device → `accepted:false`.
+- Kick klien `-debug` → muncul dua baris: `offline` 05:51:29 lalu `online` 05:51:30 untuk
+  `GNIS_AlphaProject` (event asli dari broker).
+- `resolve_device_states('solar')` → `GNIS_AlphaProject: status=offline, connection=connected, last_seen=null`.
+- Tes unit analytics-api: 19 passed (3 tes baru `parse_username_slugs`); error yang tersisa
+  pre-existing karena fixture `ch_client` butuh service ClickHouse.
+
+### I.5 Rollback
+```bash
+cd /opt/iiot_multisite
+git checkout HEAD~1 -- services/analytics-api services/frontend
+docker compose -f docker-compose.prod.yml up -d --build analytics-api frontend
+# EMQX: hapus rule & action
+curl -X DELETE -H "Authorization: Bearer $T" http://127.0.0.1:18083/api/v5/rules/conn_online
+curl -X DELETE -H "Authorization: Bearer $T" http://127.0.0.1:18083/api/v5/rules/conn_offline
+curl -X DELETE -H "Authorization: Bearer $T" http://127.0.0.1:18083/api/v5/actions/analytics_api_conn_online
+curl -X DELETE -H "Authorization: Bearer $T" http://127.0.0.1:18083/api/v5/actions/analytics_api_conn_offline
+```
