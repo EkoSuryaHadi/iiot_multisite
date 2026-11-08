@@ -53,7 +53,10 @@ class AsyncBatchBuffer:
             self._rows = []
 
         try:
-            await asyncio.to_thread(self._insert, rows_to_insert)
+            from app.clickhouse_client import get_writer_executor
+
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(get_writer_executor(), self._insert, rows_to_insert)
         except Exception:
             logger.warning(
                 "Gagal insert batch ke tabel %s (%d baris). Mengembalikan data ke antrean untuk dicoba ulang.",
@@ -76,10 +79,9 @@ class AsyncBatchBuffer:
         return len(rows_to_insert)
 
     def _insert(self, rows: list[tuple]) -> None:
-        from app.clickhouse_client import get_client
+        from app.clickhouse_client import insert_rows
 
-        client = get_client()
-        client.insert(self._table, rows, column_names=self._column_names)
+        insert_rows(self._table, rows, self._column_names)
 
     async def _periodic_flush(self) -> None:
         while True:

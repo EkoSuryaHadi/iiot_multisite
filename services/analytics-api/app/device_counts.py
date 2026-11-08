@@ -19,9 +19,10 @@ from app.database_pg import PgSessionLocal
 logger = logging.getLogger(__name__)
 
 _LAST_SEEN_SQL = """
-    SELECT site_slug, device_key, last_seen
-    FROM device_last_seen FINAL
+    SELECT site_slug, device_key, max(last_seen) AS last_seen
+    FROM device_last_seen
     WHERE tenant_slug = {tenant_slug:String} {site_filter}
+    GROUP BY site_slug, device_key
 """
 
 _REGISTERED_SQL = """
