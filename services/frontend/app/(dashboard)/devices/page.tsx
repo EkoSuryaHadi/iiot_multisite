@@ -327,12 +327,16 @@ function DevicesPageContent() {
                         <StatusPulse status="nonaktif" />
                       ) : (
                         <div className="flex flex-col gap-0.5">
-                          <StatusPulse
-                            status={deviceStatuses[device.device_key]?.status === "online" ? "online" : "offline"}
-                          />
+                          {(() => {
+                            const st = deviceStatuses[device.device_key];
+                            if (st?.status === "online") return <StatusPulse status="online" />;
+                            // terhubung ke broker tapi belum ada angka (mis. sensor belum terpasang)
+                            if (st?.connection === "connected") return <StatusPulse status="stale" label="terhubung" />;
+                            return <StatusPulse status="offline" />;
+                          })()}
                           {deviceStatuses[device.device_key]?.last_seen && (
                             <span className="text-[10px] text-neutral-400">
-                              {formatTimeAgo(deviceStatuses[device.device_key].last_seen)}
+                              data {formatTimeAgo(deviceStatuses[device.device_key].last_seen)}
                             </span>
                           )}
                         </div>

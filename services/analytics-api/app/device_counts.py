@@ -19,8 +19,18 @@ from app.database_pg import PgSessionLocal
 logger = logging.getLogger(__name__)
 
 _LAST_SEEN_SQL = """
-    SELECT site_slug, device_key, max(last_seen) AS last_seen
-    FROM device_last_seen
+    SELECT site_slug, device_key, max(ts) AS last_seen
+    FROM telemetry
+    WHERE tenant_slug = {tenant_slug:String} {site_filter}
+      AND ts > now() - INTERVAL 7 DAY
+    GROUP BY site_slug, device_key
+"""
+
+# Status koneksi broker (event client_connected / client_disconnected dari EMQX).
+# Dipakai untuk membedakan "device terhubung tapi belum kirim angka" dari "device mati".
+_CONNECTION_SQL = """
+    SELECT site_slug, device_key, argMax(status, ts) AS last_status
+    FROM device_status
     WHERE tenant_slug = {tenant_slug:String} {site_filter}
     GROUP BY site_slug, device_key
 """
@@ -89,6 +99,17 @@ def resolve_device_states(
 
     now = _as_utc(client.query("SELECT now()").result_rows[0][0])
 
+    conn: dict[tuple[str, str], str] = {}
+    try:
+        result = client.query(
+            _CONNECTION_SQL.replace("{site_filter}", site_filter), parameters=params
+        )
+        for site_row, key_row, last_status in result.result_rows:
+            if last_status:
+                conn[(str(site_row), str(key_row))] = str(last_status).lower()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("device_status dari ClickHouse gagal dibaca: %s", exc)
+
     keys: set[tuple[str, str]] = set(seen)
     keys.update(_registered_devices(tenant_slug, site_slug))
 
@@ -100,12 +121,16 @@ def resolve_device_states(
             and now is not None
             and (now - last_seen).total_seconds() <= online_threshold_seconds
         )
+        connection = conn.get((site_row, key_row))
+        if connection not in ("connected", "disconnected"):
+            connection = "connected" if connection == "online" else ("disconnected" if connection == "offline" else None)
         states.append(
             {
                 "tenant_slug": tenant_slug,
                 "site_slug": site_row,
                 "device_key": key_row,
                 "status": "online" if is_online else "offline",
+                "connection": connection,
                 "last_seen": last_seen,
             }
         )

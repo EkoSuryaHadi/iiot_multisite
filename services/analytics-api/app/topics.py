@@ -146,3 +146,20 @@ def parse_device_topic_with_client(topic: str, clientid: str | None = None) -> P
 def _norm(text: str) -> str:
     """Normalisasi nama: huruf kecil, hanya alfanumerik (abaikan _ dan -)."""
     return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def parse_username_slugs(username: str | None) -> tuple[str, str, str] | None:
+    """Username device berbentuk `{tenant}-{site}-{device}` -> (tenant, site, device).
+
+    Device key boleh mengandung '-' sehingga pemisahan memakai maxsplit 2.
+    Selain bentuk itu (mis. `internal-service`) dianggap bukan device.
+    """
+    if not username:
+        return None
+    parts = username.split("-", 2)
+    if len(parts) != 3:
+        return None
+    tenant, site, device = (p.strip() for p in parts)
+    if not tenant or not site or not device:
+        return None
+    return tenant, site, device

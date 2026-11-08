@@ -21,6 +21,19 @@ class IngestResponse(BaseModel):
     detail: str | None = None
 
 
+class ConnectionEventRequest(BaseModel):
+    """Body dari rule EMQX `$events/client_connected` / `client_disconnected`.
+
+    Username device berbentuk `{tenant}-{site}-{device}`; device_key boleh
+    mengandung tanda '-' sehingga pemisahan memakai maxsplit 2.
+    """
+
+    username: str
+    status: Literal["online", "offline"]
+    clientid: str | None = None
+    publish_received_at: int | None = None  # epoch milidetik dari ${timestamp} EMQX
+
+
 # --- Telemetry time-series ---
 class TelemetryPoint(BaseModel):
     ts: datetime
@@ -49,6 +62,9 @@ class DeviceStatusOut(BaseModel):
     site_slug: str
     device_key: str
     status: Literal["online", "offline"]
+    # Status sesi MQTT dari event broker (EMQX). None = belum ada event koneksi.
+    # "connected" + status "offline" = device hidup tapi belum mengirim angka.
+    connection: Literal["connected", "disconnected"] | None = None
     # None = device terdaftar tetapi belum pernah mengirim telemetry sama sekali.
     last_seen: datetime | None = None
 

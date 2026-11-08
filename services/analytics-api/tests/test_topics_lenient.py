@@ -60,6 +60,20 @@ def test_topik_nama_device_lain_tidak_ditebak():
     assert topics.parse_device_topic_with_client("/GNISAlphaProject", "solar-jkt-GNIS_MockupUSR") is None
 
 
+def test_parse_username_slugs_standar():
+    assert topics.parse_username_slugs("solar-jkt-GNIS_AlphaProject") == ("solar", "jkt", "GNIS_AlphaProject")
+
+
+def test_parse_username_slugs_device_key_mengandung_dash():
+    assert topics.parse_username_slugs("solar-jkt-GNIS-Alpha-01") == ("solar", "jkt", "GNIS-Alpha-01")
+
+
+def test_parse_username_slugs_bukan_device():
+    assert topics.parse_username_slugs("internal-service") is None
+    assert topics.parse_username_slugs("") is None
+    assert topics.parse_username_slugs(None) is None
+
+
 def test_legacy_tanpa_clientid_tidak_bisa_ditebak():
     assert topics.parse_device_topic_with_client("/UpTopic_GNISMQTT", None) is None
 

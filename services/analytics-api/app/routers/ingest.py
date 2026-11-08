@@ -1,5 +1,6 @@
 import hmac
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException, status
 
@@ -10,8 +11,13 @@ from app.ingest_logic import (
     extract_buffered_records,
     resolve_timestamp,
 )
-from app.schemas import IngestRequest, IngestResponse
-from app.topics import STATUS_SUFFIX, TELEMETRY_SUFFIX, parse_device_topic_with_client
+from app.schemas import ConnectionEventRequest, IngestRequest, IngestResponse
+from app.topics import (
+    STATUS_SUFFIX,
+    TELEMETRY_SUFFIX,
+    parse_device_topic_with_client,
+    parse_username_slugs,
+)
 
 router = APIRouter(tags=["ingest"])
 
@@ -79,3 +85,42 @@ async def ingest(
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST, detail=f"Suffix topik tidak didukung untuk ingest: {parsed_topic.suffix}"
     )
+
+
+@router.post("/ingest/connection", response_model=IngestResponse)
+async def ingest_connection(
+    payload: ConnectionEventRequest,
+    x_ingest_secret: str | None = Header(default=None, alias="X-Ingest-Secret"),
+) -> IngestResponse:
+    """Event koneksi broker (client_connected / client_disconnected).
+
+    Ditulis ke `device_status` supaya dashboard bisa membedakan device yang
+    terhubung-tapi-belum-kirim-angka dari device yang benar-benar mati.
+    """
+    if settings.ingest_secret:
+        if not x_ingest_secret or not hmac.compare_digest(x_ingest_secret, settings.ingest_secret):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Header X-Ingest-Secret tidak valid atau tidak disertakan",
+            )
+
+    slugs = parse_username_slugs(payload.username)
+    if slugs is None:
+        # klien non-device (internal service, dashboard) -> abaikan, jangan bikin rule gagal
+        return IngestResponse(
+            accepted=False, rows_buffered=0, detail="username bukan format tenant-site-device"
+        )
+
+    tenant_slug, site_slug, device_key = slugs
+    if payload.publish_received_at:
+        ts = datetime.fromtimestamp(payload.publish_received_at / 1000, tz=timezone.utc)
+    else:
+        ts = datetime.now(timezone.utc)
+    raw_payload = json.dumps(
+        {"status": payload.status, "clientid": payload.clientid}, separators=(",", ":")
+    )
+
+    await device_status_buffer.add(
+        (tenant_slug, site_slug, device_key, payload.status, ts, raw_payload)
+    )
+    return IngestResponse(accepted=True, rows_buffered=1)

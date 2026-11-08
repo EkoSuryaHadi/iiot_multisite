@@ -4,10 +4,11 @@ import { cn } from "@/lib/utils";
 export interface StatusPulseProps {
   status: "online" | "offline" | "stale" | string;
   showText?: boolean;
+  label?: string;
   className?: string;
 }
 
-export function StatusPulse({ status, showText = true, className }: StatusPulseProps) {
+export function StatusPulse({ status, showText = true, label, className }: StatusPulseProps) {
   const isOnline = status.toLowerCase() === "online";
   const isStale = status.toLowerCase() === "stale";
 
@@ -34,7 +35,7 @@ export function StatusPulse({ status, showText = true, className }: StatusPulseP
           )}
         />
       </span>
-      {showText && <span className="capitalize">{status}</span>}
+      {showText && <span className="capitalize">{label ?? status}</span>}
     </div>
   );
 }
