@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import re
 from sqlalchemy import text
 
 from app.cache import tenant_slug_cache
@@ -117,20 +118,31 @@ def parse_device_topic_with_client(topic: str, clientid: str | None = None) -> P
     parsed = parse_device_topic(topic)
     if parsed is not None or not clientid:
         return parsed
-    head = topic.strip("/").split("/")[0].lower()
-    is_up = head.startswith("uptopic") or head.startswith("up_topic")
-    is_sub = head.startswith("subtop") or head.startswith("sub_topic")
-    if not (is_up or is_sub):
-        return None
     device_key = _device_key_from_clientid(clientid)
     if not device_key:
         return None
     slugs = _lookup_device_slugs(device_key)
     if not slugs:
         return None
+
+    segments = [p for p in topic.strip().split("/") if p]
+    head = segments[0].lower() if segments else ""
+    is_up = head.startswith("uptopic") or head.startswith("up_topic")
+    is_sub = head.startswith("subtop") or head.startswith("sub_topic")
+    # Topik yang isinya cuma NAMA device sendiri, mis. `/GNISAlphaProject`.
+    is_own_name = len(segments) <= 2 and _norm(segments[-1]) == _norm(device_key) if segments else False
+
+    if not (is_up or is_sub or is_own_name):
+        return None
+
     return ParsedDeviceTopic(
         tenant_slug=slugs[0],
         site_slug=slugs[1],
         device_key=device_key,
-        suffix=TELEMETRY_SUFFIX if is_up else "cmd",
+        suffix="cmd" if is_sub else TELEMETRY_SUFFIX,
     )
+
+
+def _norm(text: str) -> str:
+    """Normalisasi nama: huruf kecil, hanya alfanumerik (abaikan _ dan -)."""
+    return re.sub(r"[^a-z0-9]", "", text.lower())

@@ -12,6 +12,7 @@ from app import topics
 def _stub_lookup(monkeypatch):
     mapping = {
         "GNIS_MockupUSR": ("solar", "jkt"),
+        "GNIS_AlphaProject": ("solar", "jkt"),
         "dev-1": ("solar", "jkt"),
     }
     monkeypatch.setattr(topics, "_lookup_device_slugs", lambda key: mapping.get(key))
@@ -47,6 +48,16 @@ def test_legacy_uptopic_pakai_clientid():
     p = topics.parse_device_topic_with_client("/UpTopic_GNISMQTT", "solar-jkt-GNIS_MockupUSR")
     assert p is not None
     assert (p.tenant_slug, p.site_slug, p.device_key, p.suffix) == ("solar", "jkt", "GNIS_MockupUSR", "telemetry")
+
+
+def test_topik_nama_device_sendiri_dari_clientid():
+    p = topics.parse_device_topic_with_client("/GNISAlphaProject", "solar-jkt-GNIS_AlphaProject")
+    assert p is not None
+    assert (p.tenant_slug, p.site_slug, p.device_key, p.suffix) == ("solar", "jkt", "GNIS_AlphaProject", "telemetry")
+
+
+def test_topik_nama_device_lain_tidak_ditebak():
+    assert topics.parse_device_topic_with_client("/GNISAlphaProject", "solar-jkt-GNIS_MockupUSR") is None
 
 
 def test_legacy_tanpa_clientid_tidak_bisa_ditebak():

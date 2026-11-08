@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import re
 
 # Konvensi topik: t/{tenant_slug}/s/{site_slug}/d/{device_id}/telemetry|status|cmd|resp
 DEVICE_PUBLISHABLE_SUFFIXES = {"telemetry", "status", "resp"}
@@ -84,7 +85,17 @@ def parse_device_topic_lenient(
         if head.startswith("subtop") or head.startswith("sub_topic"):
             return ParsedDeviceTopic(tenant_hint, site_hint, device_key_hint, "cmd")
 
+        # Topik yang isinya cuma NAMA device sendiri, mis. `/GNISAlphaProject`
+        # (device baru sering publish ke nama project-nya, bukan ke struktur t/s/d).
+        if len(parts) <= 2 and _norm(parts[-1]) == _norm(device_key_hint):
+            return ParsedDeviceTopic(tenant_hint, site_hint, device_key_hint, "telemetry")
+
     return None
+
+
+def _norm(text: str) -> str:
+    """Normalisasi nama: huruf kecil, hanya alfanumerik (abaikan _ dan -)."""
+    return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
 def device_topic_prefix(tenant_slug: str, site_slug: str, device_key: str) -> str:

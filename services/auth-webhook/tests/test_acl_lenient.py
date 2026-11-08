@@ -66,3 +66,13 @@ def test_gateway_data_prefix_tetap_jalan(client, device_a, tenant_a, site_a):
 def test_topic_tenant_lain_tetap_ditolak(client, device_a, tenant_a, site_a):
     topic = "/other-tenant/other-site/dev-1"
     assert _authz(client, tenant_a, site_a, topic, "publish") == "deny"
+
+
+def test_publish_topic_nama_device_sendiri(client, device_a, tenant_a, site_a):
+    # device baru sering publish ke topik sebatas nama project sendiri
+    assert _authz(client, tenant_a, site_a, "/DEV_1", "publish") == "allow"
+    assert _authz(client, tenant_a, site_a, "/dev-1", "publish") == "allow"
+
+
+def test_topic_nama_device_lain_tetap_ditolak(client, device_a, tenant_a, site_a):
+    assert _authz(client, tenant_a, site_a, "/GNISAlphaProject", "publish") == "deny"
