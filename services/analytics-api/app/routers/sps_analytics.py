@@ -77,14 +77,16 @@ def _auto_map_sps_metrics(raw: dict[str, float]) -> dict[str, float]:
 
         # 0. Input AC PLN / Grid — dipetakan lebih dulu agar tegangan AC PLN (228 V)
         #    tidak tertukar dengan tegangan DC busbar (float 53,5 V).
+        #    Kata kunci Inggris + Indonesia (Tegangan/Arus/Frekuensi/Daya) karena
+        #    firmware GNIS mengirim nama metrik berbahasa Indonesia.
         if "pln" in k_low or "grid" in k_low or "utility" in k_low:
-            if "volt" in k_low:
+            if "volt" in k_low or "tegangan" in k_low:
                 _set_if_zero("v_pln", v)
-            elif "curr" in k_low or "amp" in k_low:
+            elif "curr" in k_low or "amp" in k_low or "arus" in k_low:
                 _set_if_zero("i_rectifier", v)
-            elif "freq" in k_low:
+            elif "freq" in k_low or "frekuensi" in k_low:
                 _set_if_zero("freq_pln", v)
-            elif "power" in k_low:
+            elif "power" in k_low or "watt" in k_low or "daya" in k_low:
                 _set_if_zero("p_rectifier", v)
             continue
 
