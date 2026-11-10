@@ -7,6 +7,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.buffer import device_status_buffer, telemetry_buffer
 from app.clickhouse_client import get_client
+from app.mysql_sink import mysql_sink
 from app.oneflux_bridge import oneflux_bridge
 from app.rate_limit import limiter
 from app.routers import devices, ingest, open_api, sps_analytics, summary, telemetry
@@ -17,12 +18,14 @@ async def lifespan(app: FastAPI):
     telemetry_buffer.start()
     device_status_buffer.start()
     oneflux_bridge.start()
+    mysql_sink.start()
     try:
         yield
     finally:
         await telemetry_buffer.stop()
         await device_status_buffer.stop()
         await oneflux_bridge.stop()
+        await mysql_sink.stop()
 
 
 app = FastAPI(

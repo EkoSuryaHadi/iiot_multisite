@@ -225,3 +225,76 @@ def get_external_site_daily_energy(
         "total": len(records),
     }
 
+
+@router.get(
+    "/sites/{site_slug}/telemetry/raw",
+    summary="Data Telemetri Mentah (Raw Telemetry Series)",
+    description="Menarik riwayat telemetri mentah (time series) per metrik untuk analisis mandiri user.",
+)
+def get_external_raw_telemetry(
+    site_slug: str,
+    device_key: str = Query(..., description="Key atau identifier perangkat/gateway"),
+    metric_name: str | None = Query(default=None, description="Nama metrik spesifik (opsional, jika kosong ambil semua)"),
+    start: datetime | None = Query(default=None, description="Waktu awal UTC ISO8601 (default: 1 jam lalu)"),
+    end: datetime | None = Query(default=None, description="Waktu akhir UTC ISO8601 (default: sekarang)"),
+    limit: int = Query(default=500, ge=1, le=2000, description="Maksimum baris data"),
+    tenant_slug: str | None = Query(default=None, description="Slug tenant (opsional, auto-resolved)"),
+    db: Session = Depends(get_pg_db),
+) -> dict[str, Any]:
+    effective_tenant = _resolve_tenant_for_site(db, site_slug, tenant_slug)
+    client = get_client()
+
+    now = datetime.now(timezone.utc)
+    end_dt = end or (now + timedelta(minutes=1))
+    start_dt = start or (now - timedelta(hours=1))
+
+    where_clauses = [
+        "tenant_slug = {tenant_slug:String}",
+        "site_slug = {site_slug:String}",
+        "device_key = {device_key:String}",
+        "ts >= {start_dt:DateTime64(3)}",
+        "ts <= {end_dt:DateTime64(3)}",
+    ]
+    params: dict[str, Any] = {
+        "tenant_slug": effective_tenant,
+        "site_slug": site_slug,
+        "device_key": device_key,
+        "start_dt": start_dt,
+        "end_dt": end_dt,
+        "limit": limit,
+    }
+
+    if metric_name:
+        where_clauses.append("metric_name = {metric_name:String}")
+        params["metric_name"] = metric_name
+
+    where_str = " AND ".join(where_clauses)
+    sql = f"""
+        SELECT ts, metric_name, metric_value
+        FROM telemetry
+        WHERE {where_str}
+        ORDER BY ts DESC
+        LIMIT {{limit:UInt32}}
+    """
+    records = []
+    try:
+        res = client.query(sql, parameters=params)
+        for row in res.result_rows:
+            records.append({
+                "ts": row[0].isoformat() if hasattr(row[0], "isoformat") else str(row[0]),
+                "metric_name": row[1],
+                "metric_value": float(row[2]),
+            })
+    except Exception:
+        pass
+
+    return {
+        "tenant_slug": effective_tenant,
+        "site_slug": site_slug,
+        "device_key": device_key,
+        "start": start_dt.isoformat(),
+        "end": end_dt.isoformat(),
+        "total": len(records),
+        "data": records,
+    }
+

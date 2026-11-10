@@ -52,6 +52,22 @@ class Settings(BaseSettings):
     oneflux_mqtt_topic_prefix: str = "mitratel/gtaas"
     oneflux_publish_interval_seconds: float = 300.0
 
+    # User External MySQL Sink
+    mysql_sink_enabled: bool = False
+    mysql_sink_host: str = "127.0.0.1"
+    mysql_sink_port: int = 3306
+    mysql_sink_db: str = "iiot_telemetry"
+    mysql_sink_user: str = "root"
+    mysql_sink_password: str = ""
+    mysql_sink_table: str = "telemetry"
+    mysql_sink_tenant_slug: str = ""
+    mysql_sink_use_ssl: bool = True
+    mysql_sink_ssl_ca: str | None = None
+    mysql_sink_ssl_verify_cert: bool = False
+    mysql_sink_batch_size: int = 500
+    mysql_sink_flush_interval_seconds: float = 2.0
+    mysql_sink_max_buffered_rows: int = 100_000
+
     @property
     def postgres_url(self) -> str:
         return (

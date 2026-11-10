@@ -11,6 +11,7 @@ from app.ingest_logic import (
     extract_buffered_records,
     resolve_timestamp,
 )
+from app.mysql_sink import mysql_sink
 from app.schemas import ConnectionEventRequest, IngestRequest, IngestResponse
 from app.topics import (
     STATUS_SUFFIX,
@@ -47,17 +48,17 @@ async def ingest(
         rows_buffered = 0
         for rec_ts, metrics, rec_raw in records:
             for metric_name, metric_value in metrics:
-                await telemetry_buffer.add(
-                    (
-                        parsed_topic.tenant_slug,
-                        parsed_topic.site_slug,
-                        parsed_topic.device_key,
-                        metric_name,
-                        metric_value,
-                        rec_ts,
-                        rec_raw,
-                    )
+                row_tuple = (
+                    parsed_topic.tenant_slug,
+                    parsed_topic.site_slug,
+                    parsed_topic.device_key,
+                    metric_name,
+                    metric_value,
+                    rec_ts,
+                    rec_raw,
                 )
+                await telemetry_buffer.add(row_tuple)
+                await mysql_sink.add(row_tuple)
                 rows_buffered += 1
         return IngestResponse(accepted=True, rows_buffered=rows_buffered)
 

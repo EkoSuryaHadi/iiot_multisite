@@ -9,3 +9,5 @@ pyjwt==2.10.1
 cachetools==5.5.0
 slowapi==0.1.9
 paho-mqtt>=2.0.0
+pymysql>=1.1.0
+cryptography>=42.0.0
