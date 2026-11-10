@@ -38,8 +38,9 @@ import { useAutoRefresh } from "@/contexts/AutoRefreshContext";
 import { ApiRequestError, devicesApi, sitesApi, analyticsApi } from "@/lib/api-client";
 import type { Device, DeviceCredential, DeviceStatusItem, Site } from "@/lib/types";
 import { formatTimeAgo, StatusPulse } from "@/components/shared/status-pulse";
-import { Copy, KeyRound, Loader2, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Copy, Filter, KeyRound, Loader2, Plus, Trash2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 function CreateDeviceDialog({
@@ -196,12 +197,23 @@ function CredentialResultDialog({
 function DevicesPageContent() {
   const { isSuperadmin, selectedTenant } = useTenantContext();
   const { refreshTrigger } = useAutoRefresh();
+  const searchParams = useSearchParams();
+  const siteQueryParam = searchParams.get("site");
+
   const [devices, setDevices] = useState<Device[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
+  const [selectedSiteFilter, setSelectedSiteFilter] = useState<string>("ALL");
   const [deviceStatuses, setDeviceStatuses] = useState<Record<string, DeviceStatusItem>>({});
   const [loading, setLoading] = useState(true);
   const [credential, setCredential] = useState<DeviceCredential | null>(null);
   const [provisioningId, setProvisioningId] = useState<string | null>(null);
+
+  // Sync query param with state if provided
+  useEffect(() => {
+    if (siteQueryParam) {
+      setSelectedSiteFilter(siteQueryParam);
+    }
+  }, [siteQueryParam]);
 
   const siteNameById = (id: string) => sites.find((s) => s.id === id)?.name ?? id;
 
@@ -285,11 +297,39 @@ function DevicesPageContent() {
     }
   };
 
+  const filteredDevices = devices.filter((d) => {
+    if (selectedSiteFilter !== "ALL" && d.site_id !== selectedSiteFilter) {
+      return false;
+    }
+    return true;
+  });
+
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
         <DashboardBreadcrumb title="DEVICES" text="Devices" />
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {sites.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-neutral-400" />
+              <Select value={selectedSiteFilter} onValueChange={setSelectedSiteFilter}>
+                <SelectTrigger className="w-45 h-9 text-xs">
+                  <SelectValue placeholder="Semua Site" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Semua Site ({devices.length})</SelectItem>
+                  {sites.map((s) => {
+                    const count = devices.filter((d) => d.site_id === s.id).length;
+                    return (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name} ({count})
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <TenantSelector />
           <RoleGate allow={["superadmin", "tenant_admin", "operator"]}>
             <CreateDeviceDialog tenantId={selectedTenant?.id} sites={sites} onCreated={load} />
@@ -305,6 +345,13 @@ function DevicesPageContent() {
             <p className="text-sm text-neutral-500 px-6">Pilih atau buat tenant terlebih dahulu untuk melihat daftar device.</p>
           ) : devices.length === 0 ? (
             <p className="text-sm text-neutral-500 px-6">Belum ada device. Buat site terlebih dahulu bila belum ada.</p>
+          ) : filteredDevices.length === 0 ? (
+            <div className="py-8 text-center space-y-2">
+              <p className="text-sm text-neutral-500">Tidak ada perangkat pada site ini.</p>
+              <Button variant="outline" size="sm" onClick={() => setSelectedSiteFilter("ALL")}>
+                Tampilkan Semua Perangkat
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -317,7 +364,7 @@ function DevicesPageContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {devices.map((device) => (
+                {filteredDevices.map((device) => (
                   <TableRow key={device.id}>
                     <TableCell className="font-medium">{device.device_key}</TableCell>
                     <TableCell>{device.name}</TableCell>
@@ -390,7 +437,9 @@ function DevicesPageContent() {
 export default function DevicesPage() {
   return (
     <RoleGate allow={["superadmin", "tenant_admin", "operator", "viewer"]}>
-      <DevicesPageContent />
+      <Suspense fallback={<p className="text-sm text-neutral-500 p-6">Memuat perangkat...</p>}>
+        <DevicesPageContent />
+      </Suspense>
     </RoleGate>
   );
 }

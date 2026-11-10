@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Panduan Integrasi Gateway USR-M100 - IIoT Multisite Platform</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 18mm 16mm;
+      @bottom-right {
+        content: counter(page);
+        font-size: 9pt;
+        color: #64748b;
+      }
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      font-size: 10pt;
+      line-height: 1.55;
+      color: #1e293b;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+    }
+    .header-banner {
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .header-title h1 {
+      font-size: 18pt;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 4px 0;
+      letter-spacing: -0.5px;
+    }
+    .header-title p {
+      margin: 0;
+      color: #64748b;
+      font-size: 9.5pt;
+      font-weight: 500;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 8pt;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    h2 {
+      font-size: 12.5pt;
+      font-weight: 600;
+      color: #0f172a;
+      border-left: 4px solid #2563eb;
+      padding-left: 8px;
+      margin-top: 22px;
+      margin-bottom: 10px;
+      page-break-after: avoid;
+    }
+    h3 {
+      font-size: 10.5pt;
+      font-weight: 600;
+      color: #334155;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      page-break-after: avoid;
+    }
+    p, ul, ol {
+      margin: 0 0 10px 0;
+      color: #334155;
+    }
+    ul, ol {
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 9pt;
+      page-break-inside: avoid;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 7px 10px;
+      text-align: left;
+    }
+    th {
+      background: #f1f5f9;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+    code {
+      font-family: Consolas, 'Courier New', monospace;
+      font-size: 8.8pt;
+      background: #f1f5f9;
+      color: #0f172a;
+      padding: 2px 5px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+    pre {
+      font-family: Consolas, 'Courier New', monospace;
+      font-size: 8.5pt;
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 10px 14px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 10px 0;
+      line-height: 1.45;
+      page-break-inside: avoid;
+    }
+    .callout {
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin: 12px 0;
+      font-size: 9pt;
+      page-break-inside: avoid;
+    }
+    .callout-warning {
+      background: #fffbeb;
+      border-left: 4px solid #f59e0b;
+      color: #92400e;
+    }
+    .callout-tip {
+      background: #f0fdf4;
+      border-left: 4px solid #22c55e;
+      color: #166534;
+    }
+    .callout-info {
+      background: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      color: #1e40af;
+    }
+    .callout strong {
+      font-weight: 600;
+    }
+    .footer {
+      margin-top: 30px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 8px;
+      font-size: 8pt;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+    }
+    .step-box {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      page-break-inside: avoid;
+    }
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      background: #2563eb;
+      color: #ffffff;
+      border-radius: 50%;
+      font-size: 8.5pt;
+      font-weight: 700;
+    }
+    .step-title {
+      font-size: 11pt;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-banner">
+    <div class="header-title">
+      <h1>Panduan Integrasi Gateway USR-M100</h1>
+      <p>Modbus RTU / TCP to MQTT &bull; Platform IIoT Multisite Architecture</p>
+    </div>
+    <div>
+      <span class="badge">Standard Operating Procedure</span>
+    </div>
+  </div>
+
+  <div class="callout callout-info">
+    <strong>Arsitektur Aliran Data:</strong><br>
+    Sensor/Meter (Modbus RS485) &rarr; Gateway USR-M100 &rarr; Broker MQTT EMQX (<code>38.47.180.128:1883</code>) &rarr; Webhook Auth & Rule Engine &rarr; Analytics API & ClickHouse TSDB &rarr; Web Dashboard.
+  </div>
+
+  <!-- LANGKAH 1 -->
+  <div class="step-box">
+    <div class="step-header">
+      <span class="step-number">1</span>
+      <span class="step-title">Registrasi Device di Dashboard Web IIoT</span>
+    </div>
+    <p>Sebelum menghubungkan gateway fisik, daftarkan perangkat terlebih dahulu pada sistem untuk menerbitkan kredensial otentikasi unik.</p>
+    <ol>
+      <li>Buka dashboard web IIoT Multisite dan masuk ke menu <strong>Devices</strong>.</li>
+      <li>Pilih <strong>Tenant</strong> dan <strong>Site</strong> lokasi gateway dipasang (misal Tenant: <code>solar</code>, Site: <code>jkt</code>).</li>
+      <li>Klik tombol <strong>+ Tambah Device</strong> dan lengkapi data:
+        <ul>
+          <li><strong>Device Key:</strong> Contoh <code>GNIS_MockupUSR</code> (identitas alfanumerik unik tanpa spasi).</li>
+          <li><strong>Nama Perangkat:</strong> Contoh <code>Gateway USR M100 - Kantor Jakarta</code>.</li>
+        </ul>
+      </li>
+      <li>Setelah tersimpan di tabel, klik tombol ikon <strong>Kunci (🔑)</strong> di kolom Aksi untuk melakukan provisioning kredensial MQTT.</li>
+      <li>Salin informasi yang ditampilkan pada dialog:
+        <ul>
+          <li><strong>Client ID:</strong> <code>solar-jkt-GNIS_MockupUSR</code> (format: <code>{tenant}-{site}-{device_key}</code>)</li>
+          <li><strong>Password:</strong> String rahasia kompleks (<em>hanya ditampilkan satu kali saat dialog terbuka</em>)</li>
+          <li><strong>Topic Prefix:</strong> <code>t/solar/s/jkt/d/GNIS_MockupUSR</code></li>
+        </ul>
+      </li>
+    </ol>
+    <div class="callout callout-warning" style="margin-bottom: 0;">
+      <strong>Penting:</strong> Password MQTT <u>bukan</u> password akun login web Anda. Password ini adalah secret acak terenkripsi yang di-generate khusus per device. Jika lupa atau hilang, klik kembali tombol Kunci untuk merotasi/menghasilkan password baru.
+    </div>
+  </div>
+
+  <!-- LANGKAH 2 -->
+  <div class="step-box">
+    <div class="step-header">
+      <span class="step-number">2</span>
+      <span class="step-title">Koneksi Fisik (Wiring & Jaringan) USR-M100</span>
+    </div>
+    <ul>
+      <li><strong>Port Ethernet / LAN:</strong> Sambungkan port RJ45 USR-M100 ke switch/router lokal yang memiliki akses internet ke IP broker publik (<code>38.47.180.128</code>).</li>
+      <li><strong>Port Serial RS485:</strong> Sambungkan terminal <strong>A+</strong> dan <strong>B-</strong> ke slave Modbus RTU (seperti Power Meter, Inverter, atau sensor lingkungan). Pastikan polaritas A dan B tidak terbalik.</li>
+      <li><strong>Power Supply:</strong> Gunakan adaptor daya DC 9&ndash;36V yang stabil.</li>
+      <li><strong>Akses Web Management:</strong> Sambungkan PC/laptop ke jaringan yang sama dan buka browser ke IP default USR-M100 (default: <code>192.168.0.7</code>, user/pass: <code>admin</code> / <code>admin</code>).</li>
+    </ul>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- LANGKAH 3 -->
+  <div class="step-box">
+    <div class="step-header">
+      <span class="step-number">3</span>
+      <span class="step-title">Konfigurasi Parameter MQTT Client pada USR-M100</span>
+    </div>
+    <p>Pada Web Management USR-M100, masuk ke menu <strong>Network &rarr; MQTT</strong> (atau <strong>Cloud Platform / Edge Computing</strong>), lalu atur parameter koneksi sebagai berikut:</p>
+    
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 32%;">Parameter</th>
+          <th style="width: 38%;">Nilai Konfigurasi</th>
+          <th>Keterangan</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Work Mode / Protocol</strong></td>
+          <td><code>MQTT Client</code></td>
+          <td>Mode operasi klien MQTT TCP</td>
+        </tr>
+        <tr>
+          <td><strong>Server Address / Host</strong></td>
+          <td><code>38.47.180.128</code></td>
+          <td>IP Host Broker MQTT EMQX Cluster</td>
+        </tr>
+        <tr>
+          <td><strong>Server Port</strong></td>
+          <td><code>1883</code></td>
+          <td>Port TCP standar tanpa enkripsi TLS</td>
+        </tr>
+        <tr>
+          <td><strong>SSL / TLS / Encryption</strong></td>
+          <td><code>Disable / OFF</code></td>
+          <td>Matikan enkripsi TLS dan validasi sertifikat</td>
+        </tr>
+        <tr>
+          <td><strong>Client ID</strong></td>
+          <td><code>solar-jkt-GNIS_MockupUSR</code></td>
+          <td>Harus sesuai Client ID dari Langkah 1</td>
+        </tr>
+        <tr>
+          <td><strong>Username</strong></td>
+          <td><code>solar-jkt-GNIS_MockupUSR</code></td>
+          <td>Sama dengan Client ID</td>
+        </tr>
+        <tr>
+          <td><strong>Password</strong></td>
+          <td><em>[Secret dari tombol Kunci]</em></td>
+          <td>Password rahasia hasil provisioning</td>
+        </tr>
+        <tr>
+          <td><strong>Keepalive</strong></td>
+          <td><code>60</code> detik</td>
+          <td>Interval heartbeat koneksi</td>
+        </tr>
+        <tr>
+          <td><strong>Clean Session</strong></td>
+          <td><code>Enable / True</code></td>
+          <td>Mencegah penumpukan sesi offline usang</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- LANGKAH 4 -->
+  <div class="step-box">
+    <div class="step-header">
+      <span class="step-number">4</span>
+      <span class="step-title">Konfigurasi Topik & Format Payload JSON Telemetri</span>
+    </div>
+    <p>Di menu <strong>Modbus to MQTT Data Acquisition</strong> pada USR-M100:</p>
+
+    <h3>A. Topic Publikasi (Telemetry)</h3>
+    <pre>t/solar/s/jkt/d/GNIS_MockupUSR/telemetry</pre>
+    <p style="font-size: 8.5pt; color: #64748b;">* Pola hirarki standar: <code>t/{tenant_slug}/s/{site_slug}/d/{device_key}/telemetry</code></p>
+
+    <h3>B. Format JSON Payload</h3>
+    <p>Konfigurasikan template data Modbus agar mengeluarkan format JSON dengan key metrik numerik. Contoh template:</p>
+    <pre>{
+  "ts": 1709800000,
+  "voltage": 220.5,
+  "current": 5.2,
+  "power": 1146.6,
+  "energy": 128.4,
+  "frequency": 50.0,
+  "power_factor": 0.98
+}</pre>
+    <div class="callout callout-tip">
+      <strong>Catatan Karakteristik Ingest:</strong>
+      <ul style="margin: 4px 0 0 0; padding-left: 18px;">
+        <li>Semua field numerik (<code>voltage</code>, <code>power</code>, dll.) otomatis diparsing dan diagregasi ke ClickHouse.</li>
+        <li>Field <code>ts</code> (Unix timestamp detik) opsional. Jika gateway tidak menyediakan RTC/NTP, server otomatis menggunakan timestamp waktu data diterima broker.</li>
+      </ul>
+    </div>
+
+    <h3>C. Last Will & Testament (LWT) &mdash; Pemantauan Status Online/Offline</h3>
+    <ul>
+      <li><strong>LWT Topic:</strong> <code>t/solar/s/jkt/d/GNIS_MockupUSR/status</code></li>
+      <li><strong>LWT Message:</strong> <code>{"status": "offline"}</code></li>
+      <li><strong>Birth / Connect Message:</strong> <code>{"status": "online"}</code></li>
+    </ul>
+  </div>
+
+  <!-- LANGKAH 5 -->
+  <div class="step-box">
+    <div class="step-header">
+      <span class="step-number">5</span>
+      <span class="step-title">Troubleshooting: Solusi "Connection refused: Not authorized"</span>
+    </div>
+    <p>Jika saat pengujian koneksi muncul pesan penolakan autentikasi:</p>
+    <table style="margin-top: 6px;">
+      <thead>
+        <tr>
+          <th style="width: 25%;">Penyebab</th>
+          <th style="width: 35%;">Gejala</th>
+          <th>Solusi Perbaikan</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Password Salah</strong></td>
+          <td>Mengisi password akun web atau password default.</td>
+          <td>Buka menu Devices &rarr; klik ikon Kunci (🔑) pada device &rarr; salin password baru yang muncul.</td>
+        </tr>
+        <tr>
+          <td><strong>Device Nonaktif</strong></td>
+          <td>Device, Site, atau Tenant dalam kondisi dinonaktifkan.</td>
+          <td>Pastikan status perangkat berstatus <em>Aktif</em> di web dashboard. Sistem otomatis menolak koneksi perangkat nonaktif.</td>
+        </tr>
+        <tr>
+          <td><strong>Client ID Mismatch</strong></td>
+          <td>Client ID acak (misal <code>mqtt-explorer-xyz</code>).</td>
+          <td>Buka menu ADVANCED di MQTT Explorer/Gateway, samakan Client ID dengan Username: <code>solar-jkt-GNIS_MockupUSR</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>Validasi Sertifikat Aktif</strong></td>
+          <td>Opsi "Validate certificate" aktif di port non-TLS (1883).</td>
+          <td>Matikan toggle <em>Validate certificate</em> dan <em>Encryption (tls)</em> pada software client/gateway.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <span>Platform IIoT Multisite &bull; Dokumentasi Teknis Perangkat IoT</span>
+    <span>Tanggal: 07 November 2026</span>
+  </div>
+
+</body>
+</html>
+

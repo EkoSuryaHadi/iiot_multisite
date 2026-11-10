@@ -84,8 +84,34 @@ export const tenantsApi = {
 // --- Sites ---
 export const sitesApi = {
   list: () => dm.get<Site[]>("/sites"),
-  create: (data: { slug: string; name: string; tenant_id?: string }) => dm.post<Site>("/sites", data),
-  update: (id: string, data: { name?: string; is_active?: boolean }) => dm.patch<Site>(`/sites/${id}`, data),
+  create: (data: {
+    slug: string
+    name: string
+    tenant_id?: string
+    site_type?: string | null
+    pv_capacity_kwp?: number | null
+    mppt_capacity_a?: number | null
+    rectifier_float_voltage?: number | null
+    baseline_kwh_daily?: number | null
+    latitude?: number | null
+    longitude?: number | null
+    tower_type?: string | null
+  }) => dm.post<Site>("/sites", data),
+  update: (
+    id: string,
+    data: {
+      name?: string
+      is_active?: boolean
+      site_type?: string | null
+      pv_capacity_kwp?: number | null
+      mppt_capacity_a?: number | null
+      rectifier_float_voltage?: number | null
+      baseline_kwh_daily?: number | null
+      latitude?: number | null
+      longitude?: number | null
+      tower_type?: string | null
+    }
+  ) => dm.patch<Site>(`/sites/${id}`, data),
   remove: (id: string) => dm.delete<void>(`/sites/${id}`),
 }
 
@@ -139,6 +165,12 @@ export const analyticsApi = {
 
   getSummarySite: (params: { site_slug: string; tenant_slug?: string; start?: string; end?: string }) =>
     an.get<SiteSummary>("/summary/site", params),
+
+  getMetrics: (params?: {
+    device_key?: string
+    site_slug?: string
+    tenant_slug?: string
+  }) => an.get<string[]>("/telemetry/metrics", params),
 }
 
 // --- Mitratel SPS On-Grid (GTaaS) ---

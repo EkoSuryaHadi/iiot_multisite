@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
@@ -12,6 +12,44 @@ from app.schemas import TelemetryPoint, TelemetryResponse
 router = APIRouter(tags=["telemetry"])
 
 _AGG_TABLE = {"1m": "telemetry_agg_1m", "1h": "telemetry_agg_1h"}
+
+
+@router.get("/telemetry/metrics", response_model=list[str])
+@limiter.limit(settings.rate_limit)
+def list_telemetry_metrics(
+    request: Request,
+    device_key: str | None = None,
+    site_slug: str | None = None,
+    tenant_slug: str | None = Query(default=None, description="Hanya berlaku untuk superadmin"),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> list[str]:
+    effective_tenant = resolve_tenant_scope(current_user, tenant_slug)
+    client = get_client()
+
+    clauses = ["tenant_slug = {tenant_slug:String}"]
+    params: dict[str, Any] = {"tenant_slug": effective_tenant}
+
+    if site_slug:
+        clauses.append("site_slug = {site_slug:String}")
+        params["site_slug"] = site_slug
+
+    if device_key:
+        clauses.append("device_key = {device_key:String}")
+        params["device_key"] = device_key
+
+    where_sql = " AND ".join(clauses)
+    sql = f"""
+        SELECT DISTINCT metric_name
+        FROM telemetry
+        WHERE {where_sql}
+        ORDER BY metric_name
+        LIMIT 200
+    """
+    try:
+        result = client.query(sql, parameters=params)
+        return [str(row[0]) for row in result.result_rows if row[0]]
+    except Exception:
+        return []
 
 
 @router.get("/telemetry", response_model=TelemetryResponse)

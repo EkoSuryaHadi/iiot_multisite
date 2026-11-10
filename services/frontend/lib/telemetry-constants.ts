@@ -120,6 +120,67 @@ export const COMMON_METRICS: MetricConfig[] = [
     criticalThreshold: 3600,
     category: "mechanical",
   },
+  // --- SPS On-Grid (Solar & Power Flow) ---
+  {
+    key: "pv_power",
+    name: "PV Array Power",
+    unit: "kW",
+    min: 0,
+    max: 20,
+    warningThreshold: 15,
+    criticalThreshold: 18,
+    category: "electrical",
+  },
+  {
+    key: "pv_voltage",
+    name: "PV Array Voltage",
+    unit: "V",
+    min: 0,
+    max: 300,
+    warningThreshold: 240,
+    criticalThreshold: 260,
+    category: "electrical",
+  },
+  {
+    key: "pv_current",
+    name: "PV Array Current",
+    unit: "A",
+    min: 0,
+    max: 80,
+    warningThreshold: 60,
+    criticalThreshold: 75,
+    category: "electrical",
+  },
+  {
+    key: "mppt_current",
+    name: "MPPT Output Current",
+    unit: "A",
+    min: 0,
+    max: 120,
+    warningThreshold: 90,
+    criticalThreshold: 110,
+    category: "electrical",
+  },
+  {
+    key: "rectifier_voltage",
+    name: "Rectifier Float Voltage",
+    unit: "V",
+    min: 40,
+    max: 65,
+    warningThreshold: 56,
+    criticalThreshold: 59,
+    category: "electrical",
+  },
+  {
+    key: "irradiance",
+    name: "Solar Irradiance",
+    unit: "W/m²",
+    min: 0,
+    max: 1200,
+    warningThreshold: 1000,
+    criticalThreshold: 1150,
+    category: "environment",
+  },
 ];
 
 export function getMetricConfig(metricKey: string): MetricConfig {
@@ -137,6 +198,18 @@ export function getMetricConfig(metricKey: string): MetricConfig {
       max: 100,
       warningThreshold: 45,
       criticalThreshold: 60,
+      category: "environment",
+    };
+  }
+  if (normalized.includes("irrad") || normalized.includes("solar_rad")) {
+    return {
+      key: metricKey,
+      name: "Solar Irradiance",
+      unit: "W/m²",
+      min: 0,
+      max: 1200,
+      warningThreshold: 1000,
+      criticalThreshold: 1150,
       category: "environment",
     };
   }
@@ -161,6 +234,30 @@ export function getMetricConfig(metricKey: string): MetricConfig {
       max: 50,
       warningThreshold: 32,
       criticalThreshold: 40,
+      category: "electrical",
+    };
+  }
+  if (normalized.includes("power") || normalized.includes("watt") || normalized.includes("kw")) {
+    return {
+      key: metricKey,
+      name: "Power",
+      unit: "kW",
+      min: 0,
+      max: 30,
+      warningThreshold: 22,
+      criticalThreshold: 28,
+      category: "electrical",
+    };
+  }
+  if (normalized.includes("energy") || normalized.includes("kwh")) {
+    return {
+      key: metricKey,
+      name: "Energy",
+      unit: "kWh",
+      min: 0,
+      max: 1000,
+      warningThreshold: 800,
+      criticalThreshold: 950,
       category: "electrical",
     };
   }

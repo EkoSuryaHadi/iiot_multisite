@@ -233,6 +233,10 @@ class _InMemoryClickHouseClient:
             out = [(r[5], float(r[4])) for r in filtered]
             return _FakeQueryResult(out)
 
+        if "SELECT DISTINCT METRIC_NAME" in q_upper or "SELECT METRIC_NAME" in q_upper:
+            metrics = sorted({r[3] for r in filtered if r[3]})
+            return _FakeQueryResult([(m,) for m in metrics])
+
         if "SELECT BUCKET AS TS" in q_upper or "SELECT BUCKET" in q_upper:
             by_min: dict[int, list[float]] = {}
             min_ts: dict[int, datetime] = {}

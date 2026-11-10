@@ -14,7 +14,9 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -48,7 +50,9 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
 function toInputDateTime(date: Date): string {
@@ -58,8 +62,14 @@ function toInputDateTime(date: Date): string {
   )}:${pad(date.getMinutes())}`;
 }
 
-export default function TelemetryPage() {
+function TelemetryPageContent() {
   const { isSuperadmin, selectedTenant } = useTenantContext();
+  const searchParams = useSearchParams();
+  const deviceParam = searchParams.get("device") || searchParams.get("device_id");
+  const siteParam = searchParams.get("site") || searchParams.get("site_id");
+  const metricParam = searchParams.get("metric");
+  const intervalParam = searchParams.get("interval");
+
   const [devices, setDevices] = useState<Device[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [deviceStatuses, setDeviceStatuses] = useState<Record<string, "online" | "offline">>({});
@@ -67,8 +77,16 @@ export default function TelemetryPage() {
   // Selection states
   const [selectedSiteId, setSelectedSiteId] = useState<string>("all");
   const [deviceId, setDeviceId] = useState<string>("");
-  const [metricName, setMetricName] = useState("temp");
-  const [aggInterval, setAggInterval] = useState<"raw" | "1m" | "1h">("raw");
+  const [metricName, setMetricName] = useState(() => metricParam || "temp");
+  const [aggInterval, setAggInterval] = useState<"raw" | "1m" | "1h">(() => {
+    if (intervalParam === "1m" || intervalParam === "1h") return intervalParam;
+    return "raw";
+  });
+
+  // System & Dynamic Metrics states
+  const [systemMetrics, setSystemMetrics] = useState<string[]>([]);
+  const [loadingMetrics, setLoadingMetrics] = useState(false);
+  const [isCustomMetric, setIsCustomMetric] = useState(false);
   
   // Time states
   const [activePresetMinutes, setActivePresetMinutes] = useState<number | null>(60);
@@ -105,7 +123,13 @@ export default function TelemetryPage() {
 
   // Load devices, sites, and statuses
   const loadMetadata = useCallback(async () => {
-    if (isSuperadmin && !selectedTenant) return;
+    if (isSuperadmin && !selectedTenant) {
+      setDevices([]);
+      setSites([]);
+      setDeviceStatuses({});
+      setResult(null);
+      return;
+    }
     try {
       const [allDevices, allSites, statusRes] = await Promise.all([
         devicesApi.list(),
@@ -135,14 +159,29 @@ export default function TelemetryPage() {
         setDeviceStatuses(statusMap);
       }
 
+      if (siteParam) {
+        const matchedSite = scopedSites.find(
+          (s) => s.id === siteParam || s.slug === siteParam
+        );
+        if (matchedSite) {
+          setSelectedSiteId(matchedSite.id);
+        }
+      }
+
       setDeviceId((prev) => {
+        if (deviceParam) {
+          const matched = scopedDevices.find(
+            (d) => d.id === deviceParam || d.device_key === deviceParam
+          );
+          if (matched) return matched.id;
+        }
         if (prev && scopedDevices.some((d) => d.id === prev)) return prev;
         return scopedDevices[0]?.id || "";
       });
     } catch (error) {
       toast.error(error instanceof ApiRequestError ? error.message : "Gagal memuat daftar perangkat");
     }
-  }, [isSuperadmin, selectedTenant]);
+  }, [isSuperadmin, selectedTenant, deviceParam, siteParam]);
 
   useEffect(() => {
     loadMetadata();
@@ -153,6 +192,17 @@ export default function TelemetryPage() {
     async (targetOffset = 0, isBackground = false) => {
       if (!selectedDevice) return;
 
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        if (!isBackground) toast.error("Format tanggal dan waktu tidak valid");
+        return;
+      }
+      if (endDate <= startDate) {
+        if (!isBackground) toast.error("Waktu selesai (end) harus lebih besar dari waktu mulai (start)");
+        return;
+      }
+
       if (!isBackground) setLoading(true);
       setPage(targetOffset / pageSize);
 
@@ -162,8 +212,8 @@ export default function TelemetryPage() {
           site_slug: selectedSite?.slug,
           tenant_slug: isSuperadmin ? selectedTenant?.slug : undefined,
           metric_name: metricName,
-          start: new Date(start).toISOString(),
-          end: new Date(end).toISOString(),
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
           interval: aggInterval,
           limit: pageSize,
           offset: targetOffset,
@@ -223,9 +273,47 @@ export default function TelemetryPage() {
     setShowCustomRange(false);
   };
 
+  // Auto-fetch metrics available in the system for selected device/site
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchDeviceMetrics() {
+      if (!selectedDevice) {
+        setSystemMetrics([]);
+        return;
+      }
+      setLoadingMetrics(true);
+      try {
+        const metrics = await analyticsApi.getMetrics({
+          device_key: selectedDevice.device_key,
+          site_slug: selectedSite?.slug,
+          tenant_slug: isSuperadmin ? selectedTenant?.slug : undefined,
+        });
+        if (isMounted) {
+          const list = metrics || [];
+          setSystemMetrics(list);
+          if (list.length > 0) {
+            setMetricName((prev) => {
+              if (list.includes(prev)) return prev;
+              return list[0];
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Gagal memuat metrik sistem:", err);
+      } finally {
+        if (isMounted) setLoadingMetrics(false);
+      }
+    }
+    fetchDeviceMetrics();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedDevice?.device_key, selectedSite?.slug, isSuperadmin, selectedTenant?.slug]);
+
   // Quick Metric Selection
   const handleSelectMetric = (metricKey: string) => {
     setMetricName(metricKey);
+    setIsCustomMetric(false);
   };
 
   return (
@@ -282,9 +370,34 @@ export default function TelemetryPage() {
             initialStart={start}
             initialEnd={end}
             currentPoints={result?.points}
+            availableMetrics={systemMetrics}
           />
         </div>
       </div>
+
+      {/* Banner if no devices */}
+      {devices.length === 0 && !loading && (
+        <Card className="card mb-6 border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
+          <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg text-amber-700 dark:text-amber-300">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                  Belum ada perangkat terdaftar pada tenant ini
+                </p>
+                <p className="text-[11px] text-neutral-500">
+                  Daftarkan perangkat dan hubungkan via MQTT untuk mulai melihat data telemetri real-time.
+                </p>
+              </div>
+            </div>
+            <Button asChild size="sm" variant="outline" className="text-xs h-8">
+              <Link href="/devices">Buka Menu Perangkat</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Control & Filter Panel */}
       <Card className="card mb-6 border border-neutral-200 dark:border-slate-800 shadow-xs">
@@ -296,10 +409,10 @@ export default function TelemetryPage() {
             }}
             className="space-y-4"
           >
-            {/* Filter Row 1: Site, Device, Metric */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+            {/* Filter Row 1: Site, Device, Metric, Interval */}
+            <div className="flex flex-wrap items-end gap-3.5">
               {/* Site Selector */}
-              <div className="space-y-1.5 md:col-span-3">
+              <div className="space-y-1.5 w-full sm:w-50 shrink-0">
                 <Label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 flex items-center gap-1">
                   <Filter className="w-3.5 h-3.5 text-neutral-400" />
                   Site Industri
@@ -312,6 +425,8 @@ export default function TelemetryPage() {
                     const devsInSite = devices.filter((d) => val === "all" || d.site_id === val);
                     if (devsInSite.length > 0) {
                       setDeviceId(devsInSite[0].id);
+                    } else {
+                      setDeviceId("");
                     }
                   }}
                 >
@@ -330,11 +445,11 @@ export default function TelemetryPage() {
               </div>
 
               {/* Device Selector */}
-              <div className="space-y-1.5 md:col-span-4">
+              <div className="space-y-1.5 w-full sm:w-65 shrink-0">
                 <Label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 flex items-center justify-between">
                   <span>Perangkat IoT</span>
                   {selectedDevice && (
-                    <span className="text-[11px] font-mono text-neutral-400">
+                    <span className="text-[11px] font-mono text-neutral-400 truncate max-w-32.5" title={selectedDevice.device_key}>
                       key: {selectedDevice.device_key}
                     </span>
                   )}
@@ -360,66 +475,170 @@ export default function TelemetryPage() {
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredDevices.map((d) => {
-                      const devSite = sites.find((s) => s.id === d.site_id);
-                      const isOnline = deviceStatuses[d.device_key] === "online";
-                      return (
-                        <SelectItem key={d.id} value={d.id} className="text-xs">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`w-2 h-2 rounded-full shrink-0 ${
-                                isOnline ? "bg-emerald-500" : "bg-neutral-300 dark:bg-neutral-600"
-                              }`}
-                            />
-                            <span className="font-medium">{d.name}</span>
-                            <span className="text-neutral-400 text-[10px] font-mono">
-                              ({d.device_key})
-                            </span>
-                            {devSite && (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] py-0 px-1 text-neutral-500 border-neutral-200 ml-auto"
-                              >
-                                {devSite.name}
-                              </Badge>
-                            )}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
+                    {filteredDevices.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-neutral-400">
+                        Tidak ada perangkat pada site ini
+                      </div>
+                    ) : (
+                      filteredDevices.map((d) => {
+                        const devSite = sites.find((s) => s.id === d.site_id);
+                        const isOnline = deviceStatuses[d.device_key] === "online";
+                        return (
+                          <SelectItem key={d.id} value={d.id} className="text-xs">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`w-2 h-2 rounded-full shrink-0 ${
+                                  isOnline ? "bg-emerald-500" : "bg-neutral-300 dark:bg-neutral-600"
+                                }`}
+                              />
+                              <span className="font-medium">{d.name}</span>
+                              <span className="text-neutral-400 text-[10px] font-mono">
+                                ({d.device_key})
+                              </span>
+                              {devSite && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] py-0 px-1 text-neutral-500 border-neutral-200 ml-auto"
+                                >
+                                  {devSite.name}
+                                </Badge>
+                              )}
+                            </div>
+                          </SelectItem>
+                        );
+                      })
+                    )}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Metric Selector / Custom Input */}
-              <div className="space-y-1.5 md:col-span-3">
+              {/* Metric Dropdown Selector / Custom Input */}
+              <div className="space-y-1.5 w-full sm:w-57.5 shrink-0">
                 <Label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 flex items-center justify-between">
-                  <span>Nama Metrik</span>
+                  <span className="flex items-center gap-1">
+                    <Activity className="w-3.5 h-3.5 text-blue-500" />
+                    Nama Metrik
+                  </span>
                   {metricConfig.unit && (
                     <span className="text-[11px] text-blue-500 font-medium">
                       Satuan: {metricConfig.unit}
                     </span>
                   )}
                 </Label>
-                <div className="relative">
-                  <Input
+                {!isCustomMetric ? (
+                  <Select
                     value={metricName}
-                    onChange={(e) => {
-                      setMetricName(e.target.value);
+                    onValueChange={(val) => {
+                      if (val === "__custom__") {
+                        setIsCustomMetric(true);
+                        return;
+                      }
+                      setMetricName(val);
                       setActivePresetMinutes(null);
                     }}
-                    placeholder="temp / voltage / pressure"
-                    required
-                    className="text-xs h-9 font-mono pr-8"
-                  />
-                  <div className="absolute right-2.5 top-2.5 text-neutral-400">
-                    <Activity className="w-4 h-4" />
+                  >
+                    <SelectTrigger className="w-full text-xs h-9">
+                      <SelectValue placeholder="Pilih Metrik">
+                        <div className="flex items-center justify-between w-full pr-1">
+                          <span className="font-mono font-medium truncate">{metricName}</span>
+                          {metricConfig.unit && (
+                            <span className="text-[11px] text-neutral-400 font-sans ml-1 shrink-0">
+                              ({metricConfig.unit})
+                            </span>
+                          )}
+                        </div>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="max-h-80">
+                      {loadingMetrics ? (
+                        <div className="p-2 text-xs text-neutral-400 flex items-center gap-2">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Memuat metrik sistem...
+                        </div>
+                      ) : (
+                        <>
+                          {systemMetrics.length > 0 && (
+                            <SelectGroup>
+                              <SelectLabel className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold flex items-center justify-between px-2 py-1">
+                                <span>Metrik di Sistem</span>
+                                <span className="text-[10px] bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 px-1.5 py-0.2 rounded font-mono">
+                                  {systemMetrics.length}
+                                </span>
+                              </SelectLabel>
+                              {systemMetrics.map((m) => {
+                                const cfg = getMetricConfig(m);
+                                return (
+                                  <SelectItem key={m} value={m} className="text-xs">
+                                    <div className="flex items-center justify-between w-full gap-2">
+                                      <span className="font-mono font-medium">{m}</span>
+                                      <span className="text-neutral-400 text-[11px]">
+                                        {cfg.name !== m ? cfg.name : ""} {cfg.unit ? `(${cfg.unit})` : ""}
+                                      </span>
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectGroup>
+                          )}
+
+                          <SelectGroup>
+                            <SelectLabel className="text-[11px] text-neutral-500 font-semibold px-2 py-1">
+                              {systemMetrics.length > 0 ? "Metrik Standar Lainnya" : "Metrik Standar"}
+                            </SelectLabel>
+                            {COMMON_METRICS.filter((cm) => !systemMetrics.includes(cm.key)).map((cm) => (
+                              <SelectItem key={cm.key} value={cm.key} className="text-xs">
+                                <div className="flex items-center justify-between w-full gap-2">
+                                  <span className="font-mono">{cm.key}</span>
+                                  <span className="text-neutral-400 text-[11px]">
+                                    {cm.name} ({cm.unit})
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+
+                          <SelectGroup>
+                            <SelectItem
+                              value="__custom__"
+                              className="text-xs text-blue-600 dark:text-blue-400 font-medium border-t border-neutral-100 dark:border-slate-800 cursor-pointer"
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5" />
+                                + Input Metrik Kustom...
+                              </span>
+                            </SelectItem>
+                          </SelectGroup>
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="relative flex items-center">
+                    <Input
+                      value={metricName}
+                      onChange={(e) => {
+                        setMetricName(e.target.value);
+                        setActivePresetMinutes(null);
+                      }}
+                      placeholder="temp / voltage / pressure"
+                      required
+                      autoFocus
+                      className="text-xs h-9 font-mono pr-16"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomMetric(false)}
+                      title="Kembali ke dropdown"
+                      className="absolute right-1 text-[11px] text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200 px-1.5 py-1 bg-neutral-100 dark:bg-slate-800 rounded hover:bg-neutral-200"
+                    >
+                      Pilih ▾
+                    </button>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Interval */}
-              <div className="space-y-1.5 md:col-span-2">
+              <div className="space-y-1.5 w-full sm:w-40 shrink-0">
                 <Label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300">
                   Agregasi Interval
                 </Label>
@@ -900,5 +1119,24 @@ export default function TelemetryPage() {
         </Card>
       )}
     </>
+  );
+}
+
+export default function TelemetryPage() {
+  return (
+    <Suspense
+      fallback={
+        <Card className="card mb-6 border border-neutral-200 dark:border-slate-800">
+          <CardContent className="p-12 text-center flex flex-col items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
+            <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+              Memuat Dashboard Telemetri...
+            </p>
+          </CardContent>
+        </Card>
+      }
+    >
+      <TelemetryPageContent />
+    </Suspense>
   );
 }

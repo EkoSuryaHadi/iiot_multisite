@@ -30,14 +30,19 @@ export default function TelemetryChart({
 
   const isDark = mounted && (resolvedTheme === "dark" || theme === "dark");
 
-  const isAggregated = interval !== "raw" && points.some((p) => p.min !== undefined && p.max !== undefined);
+  // Ensure points are sorted in chronological ascending order for ApexCharts datetime
+  const sortedPoints = [...points].sort(
+    (a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime()
+  );
+
+  const isAggregated = interval !== "raw" && sortedPoints.some((p) => p.min !== undefined && p.max !== undefined);
 
   const series: ApexOptions["series"] = isAggregated
     ? [
         {
           name: `Rata-rata (${metricName})`,
           type: "area",
-          data: points.map((p) => ({
+          data: sortedPoints.map((p) => ({
             x: new Date(p.ts).getTime(),
             y: p.avg !== null && p.avg !== undefined ? Number(p.avg.toFixed(2)) : 0,
           })),
@@ -45,7 +50,7 @@ export default function TelemetryChart({
         {
           name: `Maksimum`,
           type: "line",
-          data: points.map((p) => ({
+          data: sortedPoints.map((p) => ({
             x: new Date(p.ts).getTime(),
             y: p.max !== null && p.max !== undefined ? Number(p.max.toFixed(2)) : 0,
           })),
@@ -53,7 +58,7 @@ export default function TelemetryChart({
         {
           name: `Minimum`,
           type: "line",
-          data: points.map((p) => ({
+          data: sortedPoints.map((p) => ({
             x: new Date(p.ts).getTime(),
             y: p.min !== null && p.min !== undefined ? Number(p.min.toFixed(2)) : 0,
           })),
@@ -63,7 +68,7 @@ export default function TelemetryChart({
         {
           name: `${metricName}${unit ? ` (${unit})` : ""}`,
           type: "area",
-          data: points.map((p) => ({
+          data: sortedPoints.map((p) => ({
             x: new Date(p.ts).getTime(),
             y: p.value !== null && p.value !== undefined ? Number(p.value.toFixed(2)) : (p.avg ?? 0),
           })),
@@ -157,7 +162,10 @@ export default function TelemetryChart({
           colors: isDark ? "#94A3B8" : "#64748B",
           fontSize: "11px",
         },
-        formatter: (val) => `${val.toFixed(1)}${unit ? ` ${unit}` : ""}`,
+        formatter: (val) =>
+          typeof val === "number" && !isNaN(val)
+            ? `${val.toFixed(1)}${unit ? ` ${unit}` : ""}`
+            : "",
       },
     },
   };

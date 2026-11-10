@@ -34,6 +34,7 @@ interface ExportTelemetryDialogProps {
   initialStart?: string;
   initialEnd?: string;
   currentPoints?: TelemetryPoint[];
+  availableMetrics?: string[];
 }
 
 export function ExportTelemetryDialog({
@@ -45,6 +46,7 @@ export function ExportTelemetryDialog({
   initialStart,
   initialEnd,
   currentPoints,
+  availableMetrics,
 }: ExportTelemetryDialogProps) {
   const [open, setOpen] = useState(false);
   const [deviceId, setDeviceId] = useState(initialDeviceId || devices[0]?.id || "");
@@ -137,6 +139,18 @@ export function ExportTelemetryDialog({
       toast.error("Pilih device telemetri terlebih dahulu");
       return;
     }
+
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      toast.error("Format tanggal dan waktu tidak valid");
+      return;
+    }
+    if (endDate <= startDate) {
+      toast.error("Waktu selesai (end) harus lebih besar dari waktu mulai (start)");
+      return;
+    }
+
     const site = sites.find((s) => s.id === dev.site_id);
 
     setExporting(true);
@@ -145,8 +159,8 @@ export function ExportTelemetryDialog({
         device_key: dev.device_key,
         site_slug: site?.slug,
         metric_name: metricName,
-        start: new Date(start).toISOString(),
-        end: new Date(end).toISOString(),
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
         interval,
         limit,
         offset: 0,
@@ -262,13 +276,28 @@ export function ExportTelemetryDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Nama Metrik</Label>
-              <Input
-                value={metricName}
-                onChange={(e) => setMetricName(e.target.value)}
-                placeholder="temp / voltage / pressure"
-                required
-                className="text-xs h-9"
-              />
+              {availableMetrics && availableMetrics.length > 0 ? (
+                <Select value={metricName} onValueChange={(val) => val && setMetricName(val)}>
+                  <SelectTrigger className="w-full text-xs h-9">
+                    <SelectValue placeholder="Pilih metrik" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableMetrics.map((m) => (
+                      <SelectItem key={m} value={m} className="text-xs font-mono">
+                        {m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={metricName}
+                  onChange={(e) => setMetricName(e.target.value)}
+                  placeholder="temp / voltage / pressure"
+                  required
+                  className="text-xs h-9"
+                />
+              )}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Agregasi Interval</Label>

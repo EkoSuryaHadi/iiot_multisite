@@ -189,3 +189,42 @@ def test_rate_limit_key_uses_jwt_sub_and_forwarded_for(tenant_a):
         }
     )
     assert get_rate_limit_key(req_xff) == "ip:203.0.113.5"
+
+
+async def test_list_telemetry_metrics(client, ch_client, tenant_a, tenant_b):
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    # Seed metrics for tenant_a, gw-01
+    await _seed_telemetry(ch_client, "acme", "jkt", "gw-01", "temp", [(base, 25.0)])
+    await _seed_telemetry(ch_client, "acme", "jkt", "gw-01", "humidity", [(base, 60.0)])
+    # Seed metrics for tenant_a, gw-02
+    await _seed_telemetry(ch_client, "acme", "bdg", "gw-02", "voltage", [(base, 220.0)])
+    # Seed metrics for tenant_b
+    await _seed_telemetry(ch_client, "beta", "sby", "gw-99", "pressure", [(base, 5.0)])
+
+    token_a = make_token(tenant_a.id, "viewer")
+    
+    # 1. Query metrics for device gw-01 in tenant_a
+    resp = await client.get(
+        "/telemetry/metrics",
+        params={"device_key": "gw-01"},
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert resp.status_code == 200, resp.text
+    metrics = resp.json()
+    assert "temp" in metrics
+    assert "humidity" in metrics
+    assert "voltage" not in metrics
+    assert "pressure" not in metrics
+
+    # 2. Query all metrics for tenant_a without device_key
+    resp_all = await client.get(
+        "/telemetry/metrics",
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert resp_all.status_code == 200, resp_all.text
+    all_metrics = resp_all.json()
+    assert "temp" in all_metrics
+    assert "humidity" in all_metrics
+    assert "voltage" in all_metrics
+    assert "pressure" not in all_metrics  # Isolated from tenant_b
+

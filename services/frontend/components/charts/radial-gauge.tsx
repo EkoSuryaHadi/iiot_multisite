@@ -29,8 +29,10 @@ export function RadialGauge({
   criticalThreshold = 90,
   className,
 }: RadialGaugeProps) {
-  // Normalize percentage for radialBar (0 - 100%)
-  const percentage = Math.min(Math.max(((value - min) / (max - min)) * 100, 0), 100);
+  // Normalize percentage for radialBar (0 - 100%) safely without division by zero
+  const range = max > min ? max - min : 1;
+  const rawPercentage = ((value - min) / range) * 100;
+  const percentage = isNaN(rawPercentage) ? 0 : Math.min(Math.max(rawPercentage, 0), 100);
 
   // Determine color status
   let barColor = "#10B981"; // Emerald green
