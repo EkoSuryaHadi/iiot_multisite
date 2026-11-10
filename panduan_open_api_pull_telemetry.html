@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Panduan & Dokumentasi Penarikan Data Telemetri via REST API (Pull Model)</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 15mm 14mm 15mm 14mm;
+      @bottom-right {
+        content: "Halaman " counter(page);
+        font-size: 8.5pt;
+        color: #64748b;
+      }
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+      font-size: 9.5pt;
+      line-height: 1.5;
+      color: #1e293b;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+    }
+    .header-banner {
+      border-bottom: 2.5px solid #2563eb;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .header-title h1 {
+      font-size: 17pt;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 4px 0;
+      letter-spacing: -0.3px;
+    }
+    .header-title p {
+      margin: 0;
+      color: #64748b;
+      font-size: 9.5pt;
+      font-weight: 500;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 8pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+    }
+    .meta-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      font-size: 8.5pt;
+    }
+    .meta-item strong {
+      display: block;
+      color: #475569;
+      font-size: 7.5pt;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+      letter-spacing: 0.4px;
+    }
+    .meta-item span {
+      color: #0f172a;
+      font-weight: 600;
+    }
+    h2 {
+      font-size: 11pt;
+      font-weight: 700;
+      color: #0f172a;
+      border-left: 3.5px solid #2563eb;
+      padding-left: 8px;
+      margin: 14px 0 8px 0;
+    }
+    h3 {
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: #1e293b;
+      margin: 10px 0 4px 0;
+    }
+    p, li {
+      color: #334155;
+      margin: 0 0 5px 0;
+    }
+    ul, ol {
+      margin: 0 0 8px 0;
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 3px;
+    }
+    .alert-info {
+      background: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin: 8px 0 12px 0;
+      font-size: 9pt;
+      color: #1e40af;
+    }
+    .code-block {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 8.2pt;
+      padding: 9px 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 6px 0 10px 0;
+      line-height: 1.4;
+    }
+    .code-block .kw { color: #38bdf8; font-weight: 600; }
+    .code-block .str { color: #4ade80; }
+    .code-block .com { color: #94a3b8; font-style: italic; }
+    .code-block .val { color: #f472b6; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 12px 0;
+      font-size: 8.5pt;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 5px 8px;
+      text-align: left;
+    }
+    th {
+      background: #f1f5f9;
+      color: #1e293b;
+      font-weight: 600;
+    }
+    tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    .method-get {
+      display: inline-block;
+      background: #dcfce7;
+      color: #15803d;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 7.5pt;
+    }
+    .footer {
+      margin-top: 18px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 8px;
+      font-size: 8pt;
+      color: #94a3b8;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-banner">
+    <div class="header-title">
+      <h1>Dokumentasi REST API Telemetri (On-Demand Pull)</h1>
+      <p>Layanan Integrasi Data Mandiri Multi-Site IIoT Platform</p>
+    </div>
+    <div>
+      <span class="badge">RESTful API v1</span>
+    </div>
+  </div>
+
+  <div class="meta-box">
+    <div class="meta-item">
+      <strong>Protokol & Format</strong>
+      <span>HTTPS / JSON (REST API)</span>
+    </div>
+    <div class="meta-item">
+      <strong>Otentikasi</strong>
+      <span>Header: X-API-Key</span>
+    </div>
+    <div class="meta-item">
+      <strong>Format Response</strong>
+      <span>Standar Terstruktur & Raw Timeseries</span>
+    </div>
+  </div>
+
+  <h2>1. Ringkasan & Cara Kerja</h2>
+  <p>
+    Layanan REST API ini memungkinkan tim teknis/developer Anda untuk menarik (<em>pull</em>) data operasional, metrik kelistrikan, performa energi, hingga data telemetri mentah kapan saja secara on-demand untuk dihubungkan ke sistem internal, database lokal, atau visualizer (Grafana, Power BI, Web Portal).
+  </p>
+
+  <div class="alert-info">
+    <strong>Kredensial Akses:</strong>
+    Setiap request wajib menyertakan header <code>X-API-Key: [API_KEY_ANDA]</code>. Base URL produksi adalah:
+    <code>https://[DOMAIN_ATAU_IP_SERVER_KAMI]</code>
+  </div>
+
+  <h2>2. Endpoint API Tersedia</h2>
+
+  <h3>A. Data Telemetri Mentah Timeseries (Raw Telemetry)</h3>
+  <p>
+    <span class="method-get">GET</span> <code>/api/v1/external/sites/{site_slug}/telemetry/raw</code>
+  </p>
+  <p>Digunakan untuk menarik riwayat angka sensor mentah per perangkat dalam rentang waktu tertentu.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Query Parameter</th>
+        <th>Tipe</th>
+        <th>Wajib?</th>
+        <th>Keterangan & Contoh</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>device_key</code></td>
+        <td>String</td>
+        <td><strong>Ya</strong></td>
+        <td>Identifier / Key perangkat (contoh: <code>gw-sps-01</code>)</td>
+      </tr>
+      <tr>
+        <td><code>metric_name</code></td>
+        <td>String</td>
+        <td>Tidak</td>
+        <td>Filter metrik spesifik (contoh: <code>v_pv</code>, <code>p_load</code>, <code>temp</code>). Jika dikosongkan akan mengambil semua metrik.</td>
+      </tr>
+      <tr>
+        <td><code>start</code> / <code>end</code></td>
+        <td>ISO-8601</td>
+        <td>Tidak</td>
+        <td>Rentang waktu UTC (contoh: <code>2026-11-10T00:00:00Z</code>). Default: 1 jam terakhir.</td>
+      </tr>
+      <tr>
+        <td><code>limit</code></td>
+        <td>Integer</td>
+        <td>Tidak</td>
+        <td>Maksimal baris data (Default: <code>500</code>, Maks: <code>2000</code>).</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="code-block">
+<span class="com"># Contoh Request cURL:</span>
+curl -X GET <span class="str">"https://[DOMAIN_KAMI]/api/v1/external/sites/site-jkt-01/telemetry/raw?device_key=gw-sps-01&metric_name=v_pv&limit=100"</span> \
+  -H <span class="str">"X-API-Key: [API_KEY_ANDA]"</span>
+
+<span class="com"># Contoh Response JSON:</span>
+{
+  <span class="kw">"site_slug"</span>: <span class="str">"site-jkt-01"</span>,
+  <span class="kw">"device_key"</span>: <span class="str">"gw-sps-01"</span>,
+  <span class="kw">"total"</span>: <span class="val">2</span>,
+  <span class="kw">"data"</span>: [
+    { <span class="kw">"ts"</span>: <span class="str">"2026-11-10T07:00:00.000Z"</span>, <span class="kw">"metric_name"</span>: <span class="str">"v_pv"</span>, <span class="kw">"metric_value"</span>: <span class="val">54.2</span> },
+    { <span class="kw">"ts"</span>: <span class="str">"2026-11-10T06:59:58.000Z"</span>, <span class="kw">"metric_name"</span>: <span class="str">"v_pv"</span>, <span class="kw">"metric_value"</span>: <span class="val">54.1</span> }
+  ]
+}
+  </div>
+
+  <h3>B. Snapshot Kelistrikan Real-Time & Efisiensi Energi</h3>
+  <p>
+    <span class="method-get">GET</span> <code>/api/v1/external/sites/{site_slug}/metrics</code>
+  </p>
+  <p>Menghasilkan status terkini daya PV, MPPT, Rectifier, Load, Solar Contribution Ratio (SCR), dan Performance Ratio (PR).</p>
+  <div class="code-block">
+curl -X GET <span class="str">"https://[DOMAIN_KAMI]/api/v1/external/sites/site-jkt-01/metrics"</span> \
+  -H <span class="str">"X-API-Key: [API_KEY_ANDA]"</span>
+  </div>
+
+  <h3>C. Indeks Kesehatan PV & MPPT Controller</h3>
+  <p>
+    <span class="method-get">GET</span> <code>/api/v1/external/sites/{site_slug}/health</code>
+  </p>
+  <p>Menyajikan skor kesehatan PV Array, MPPT Controller, load sharing voltage delta, dan alarm status (HEALTHY, WARNING, CRITICAL).</p>
+
+  <h3>D. Riwayat Energi Harian & Rekonsiliasi (Daily Aggregation)</h3>
+  <p>
+    <span class="method-get">GET</span> <code>/api/v1/external/sites/{site_slug}/daily?start_date=2026-11-01&end_date=2026-11-10</code>
+  </p>
+  <p>Menyajikan total akumulasi harian Solar kWh, Grid Rectifier kWh, Load kWh, dan persentase SCR.</p>
+
+  <h2>3. Contoh Script Python Penarik Data ke Database Lokal</h2>
+  <div class="code-block">
+<span class="kw">import</span> requests
+<span class="kw">import</span> pymysql
+
+API_KEY = <span class="str">"masukkan-api-key-anda"</span>
+BASE_URL = <span class="str">"https://[DOMAIN_KAMI]/api/v1/external/sites/site-jkt-01/telemetry/raw"</span>
+
+headers = {<span class="str">"X-API-Key"</span>: API_KEY}
+params = {<span class="str">"device_key"</span>: <span class="str">"gw-sps-01"</span>, <span class="str">"limit"</span>: 500}
+
+resp = requests.get(BASE_URL, headers=headers, params=params)
+<span class="kw">if</span> resp.status_code == 200:
+    records = resp.json().get(<span class="str">"data"</span>, [])
+    print(f<span class="str">"Berhasil menarik {len(records)} data telemetri."</span>)
+    <span class="com"># Anda dapat langsung INSERT baris 'records' ini ke database lokal/MySQL Anda</span>
+  </div>
+
+  <div class="footer">
+    Dokumen Integrasi REST API IIoT &copy; 2026. Seluruh hak cipta dilindungi.
+  </div>
+
+</body>
+</html>
