@@ -80,7 +80,7 @@ function TelemetryPageContent() {
   const [metricName, setMetricName] = useState(() => metricParam || "temp");
   const [aggInterval, setAggInterval] = useState<"raw" | "1m" | "1h">(() => {
     if (intervalParam === "1m" || intervalParam === "1h") return intervalParam;
-    return "raw";
+    return "1m";
   });
 
   // System & Dynamic Metrics states
@@ -88,14 +88,14 @@ function TelemetryPageContent() {
   const [loadingMetrics, setLoadingMetrics] = useState(false);
   const [isCustomMetric, setIsCustomMetric] = useState(false);
   
-  // Time states
-  const [activePresetMinutes, setActivePresetMinutes] = useState<number | null>(60);
+  // Time states: default 24 jam terakhir (1440 menit) agar data historis langsung tampil
+  const [activePresetMinutes, setActivePresetMinutes] = useState<number | null>(1440);
   const [showCustomRange, setShowCustomRange] = useState(false);
-  const [start, setStart] = useState(() => toInputDateTime(new Date(Date.now() - 60 * 60 * 1000)));
+  const [start, setStart] = useState(() => toInputDateTime(new Date(Date.now() - 24 * 60 * 60 * 1000)));
   const [end, setEnd] = useState(() => toInputDateTime(new Date()));
 
   // Auto-refresh states
-  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(0); // 0 = off, 10, 30, 60
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(0); // 0 = off, 5, 15, 30, 60
   const [isLivePulse, setIsLivePulse] = useState(false);
 
   // Table & Results
@@ -104,7 +104,6 @@ function TelemetryPageContent() {
   const pageSize = 50;
 
   const [loading, setLoading] = useState(false);
-  const [initialLoaded, setInitialLoaded] = useState(false);
   const [result, setResult] = useState<TelemetryResponse | null>(null);
 
   // Filter devices by selected site
@@ -187,18 +186,32 @@ function TelemetryPageContent() {
     loadMetadata();
   }, [loadMetadata]);
 
-  // Main search function
+  // Main search function with parameter overrides
   const fetchTelemetry = useCallback(
-    async (targetOffset = 0, isBackground = false) => {
-      if (!selectedDevice) return;
+    async (
+      targetOffset = 0,
+      isBackground = false,
+      override?: {
+        device?: Device;
+        metric?: string;
+        interval?: "raw" | "1m" | "1h";
+        startDate?: Date;
+        endDate?: Date;
+      }
+    ) => {
+      const dev = override?.device ?? selectedDevice;
+      if (!dev) return;
 
-      const startDate = new Date(start);
-      const endDate = new Date(end);
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      const metric = override?.metric ?? metricName;
+      const interval = override?.interval ?? aggInterval;
+      const sDate = override?.startDate ?? new Date(start);
+      const eDate = override?.endDate ?? new Date(end);
+
+      if (isNaN(sDate.getTime()) || isNaN(eDate.getTime())) {
         if (!isBackground) toast.error("Format tanggal dan waktu tidak valid");
         return;
       }
-      if (endDate <= startDate) {
+      if (eDate <= sDate) {
         if (!isBackground) toast.error("Waktu selesai (end) harus lebih besar dari waktu mulai (start)");
         return;
       }
@@ -207,14 +220,15 @@ function TelemetryPageContent() {
       setPage(targetOffset / pageSize);
 
       try {
+        const site = sites.find((s) => s.id === dev.site_id);
         const res = await analyticsApi.getTelemetry({
-          device_key: selectedDevice.device_key,
-          site_slug: selectedSite?.slug,
+          device_key: dev.device_key,
+          site_slug: site?.slug,
           tenant_slug: isSuperadmin ? selectedTenant?.slug : undefined,
-          metric_name: metricName,
-          start: startDate.toISOString(),
-          end: endDate.toISOString(),
-          interval: aggInterval,
+          metric_name: metric,
+          start: sDate.toISOString(),
+          end: eDate.toISOString(),
+          interval: interval,
           limit: pageSize,
           offset: targetOffset,
         });
@@ -232,17 +246,8 @@ function TelemetryPageContent() {
         if (!isBackground) setLoading(false);
       }
     },
-    [selectedDevice, selectedSite, isSuperadmin, selectedTenant, metricName, start, end, aggInterval]
+    [selectedDevice, sites, isSuperadmin, selectedTenant, metricName, aggInterval, start, end]
   );
-
-  // Auto-load on initial device load
-  const initialFetchDoneRef = useRef(false);
-  useEffect(() => {
-    if (selectedDevice && !initialFetchDoneRef.current) {
-      initialFetchDoneRef.current = true;
-      fetchTelemetry(0).then(() => setInitialLoaded(true));
-    }
-  }, [selectedDevice, fetchTelemetry]);
 
   // Auto-refresh timer
   useEffect(() => {
@@ -262,7 +267,7 @@ function TelemetryPageContent() {
     return () => window.clearInterval(timer);
   }, [autoRefreshInterval, activePresetMinutes, page, fetchTelemetry]);
 
-  // Handle Quick Time Presets
+  // Handle Quick Time Presets (langsung fetch)
   const handleApplyPreset = (minutes: number, recInterval: "raw" | "1m" | "1h") => {
     const now = new Date();
     const past = new Date(now.getTime() - minutes * 60 * 1000);
@@ -271,16 +276,25 @@ function TelemetryPageContent() {
     setAggInterval(recInterval);
     setActivePresetMinutes(minutes);
     setShowCustomRange(false);
+    fetchTelemetry(0, false, {
+      startDate: past,
+      endDate: now,
+      interval: recInterval,
+    });
   };
 
-  // Auto-fetch metrics available in the system for selected device/site
+  // Fetch available metrics from system whenever selected device changes, then automatically load telemetry
+  const deviceKeyRef = useRef<string | null>(null);
   useEffect(() => {
+    if (!selectedDevice) {
+      setSystemMetrics([]);
+      deviceKeyRef.current = null;
+      return;
+    }
+
     let isMounted = true;
     async function fetchDeviceMetrics() {
-      if (!selectedDevice) {
-        setSystemMetrics([]);
-        return;
-      }
+      if (!selectedDevice) return;
       setLoadingMetrics(true);
       try {
         const metrics = await analyticsApi.getMetrics({
@@ -288,15 +302,43 @@ function TelemetryPageContent() {
           site_slug: selectedSite?.slug,
           tenant_slug: isSuperadmin ? selectedTenant?.slug : undefined,
         });
+
         if (isMounted) {
           const list = metrics || [];
           setSystemMetrics(list);
-          if (list.length > 0) {
-            setMetricName((prev) => {
-              if (list.includes(prev)) return prev;
-              return list[0];
-            });
+
+          // Tentukan metrik terbaik yang benar-benar ada data di sistem
+          let chosen = metricParam;
+          if (!chosen || !list.includes(chosen)) {
+            if (metricName && list.includes(metricName)) {
+              chosen = metricName;
+            } else if (list.length > 0) {
+              // Utamakan metrik solar/daya jika tersedia
+              const preferred = [
+                "Top_PV_InputPower",
+                "pv_power",
+                "power",
+                "Top_Battery_Voltage",
+                "voltage",
+                "Top_Batere_SOC",
+                "Temp_Humid_Sensor_Suhu",
+                "temp",
+              ];
+              const match = preferred.find((p) => list.includes(p));
+              chosen = match || list[0];
+            } else {
+              chosen = metricName || "temp";
+            }
           }
+
+          setMetricName(chosen);
+          deviceKeyRef.current = selectedDevice.device_key;
+
+          // Langsung fetch data telemetri dengan metrik yang valid
+          fetchTelemetry(0, false, {
+            device: selectedDevice,
+            metric: chosen,
+          });
         }
       } catch (err) {
         console.error("Gagal memuat metrik sistem:", err);
@@ -304,22 +346,46 @@ function TelemetryPageContent() {
         if (isMounted) setLoadingMetrics(false);
       }
     }
+
     fetchDeviceMetrics();
     return () => {
       isMounted = false;
     };
-  }, [selectedDevice?.device_key, selectedSite?.slug, isSuperadmin, selectedTenant?.slug]);
+  }, [selectedDevice?.id, selectedDevice?.device_key, selectedSite?.slug, isSuperadmin, selectedTenant?.slug]);
 
-  // Quick Metric Selection
+  // Quick Metric Selection (langsung fetch)
   const handleSelectMetric = (metricKey: string) => {
     setMetricName(metricKey);
     setIsCustomMetric(false);
+    fetchTelemetry(0, false, { metric: metricKey });
   };
+
+  // Dynamic quick chips (utamakan metrik yang benar-benar ada di device)
+  const displayedMetricChips = (() => {
+    if (systemMetrics.length > 0) {
+      return systemMetrics.slice(0, 7).map((m) => {
+        const cfg = getMetricConfig(m);
+        return {
+          key: m,
+          label: cfg.name !== m ? `${cfg.name}` : m,
+          unit: cfg.unit,
+        };
+      });
+    }
+    return [
+      { key: "temp", label: "Suhu", unit: "°C" },
+      { key: "humidity", label: "Kelembapan", unit: "%" },
+      { key: "voltage", label: "Tegangan", unit: "V" },
+      { key: "current", label: "Arus", unit: "A" },
+      { key: "power", label: "Daya", unit: "kW" },
+      { key: "pressure", label: "Tekanan", unit: "bar" },
+    ];
+  })();
 
   return (
     <>
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
           <DashboardBreadcrumb title="TELEMETRY" text="Telemetry Realtime & Analytics" />
           <p className="text-xs text-neutral-500 mt-1">
@@ -331,7 +397,7 @@ function TelemetryPageContent() {
           <TenantSelector />
 
           {/* Auto Refresh Toggle */}
-          <div className="flex items-center bg-white dark:bg-slate-900 border border-neutral-200 dark:border-slate-800 rounded-lg p-1 text-xs">
+          <div className="flex items-center bg-white dark:bg-slate-900 border border-neutral-200 dark:border-slate-800 rounded-lg p-1 text-xs shadow-xs">
             <span className="flex items-center gap-1.5 px-2 text-neutral-500 font-medium">
               <Radio
                 className={`w-3 h-3 ${
@@ -377,7 +443,7 @@ function TelemetryPageContent() {
 
       {/* Banner if no devices */}
       {devices.length === 0 && !loading && (
-        <Card className="card mb-6 border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
+        <Card className="mb-5 border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800 shadow-xs">
           <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-amber-100 dark:bg-amber-900/50 rounded-lg text-amber-700 dark:text-amber-300">
@@ -399,20 +465,20 @@ function TelemetryPageContent() {
         </Card>
       )}
 
-      {/* Control & Filter Panel */}
-      <Card className="card mb-6 border border-neutral-200 dark:border-slate-800 shadow-xs">
-        <CardContent className="p-5">
+      {/* Control & Filter Panel (Compact, natural height - no h-full stretching) */}
+      <Card className="mb-5 bg-white dark:bg-[#273142] border border-neutral-200 dark:border-slate-800 shadow-xs rounded-xl overflow-hidden">
+        <CardContent className="p-4 sm:p-5">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               fetchTelemetry(0);
             }}
-            className="space-y-4"
+            className="space-y-3.5"
           >
             {/* Filter Row 1: Site, Device, Metric, Interval */}
-            <div className="flex flex-wrap items-end gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
               {/* Site Selector */}
-              <div className="space-y-1.5 w-full sm:w-50 shrink-0">
+              <div className="space-y-1.5 lg:col-span-3">
                 <Label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 flex items-center gap-1">
                   <Filter className="w-3.5 h-3.5 text-neutral-400" />
                   Site Industri
@@ -421,7 +487,6 @@ function TelemetryPageContent() {
                   value={selectedSiteId}
                   onValueChange={(val) => {
                     setSelectedSiteId(val);
-                    // Reset device to first available under that site
                     const devsInSite = devices.filter((d) => val === "all" || d.site_id === val);
                     if (devsInSite.length > 0) {
                       setDeviceId(devsInSite[0].id);
@@ -445,11 +510,11 @@ function TelemetryPageContent() {
               </div>
 
               {/* Device Selector */}
-              <div className="space-y-1.5 w-full sm:w-65 shrink-0">
+              <div className="space-y-1.5 lg:col-span-4">
                 <Label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 flex items-center justify-between">
                   <span>Perangkat IoT</span>
                   {selectedDevice && (
-                    <span className="text-[11px] font-mono text-neutral-400 truncate max-w-32.5" title={selectedDevice.device_key}>
+                    <span className="text-[11px] font-mono text-neutral-400 truncate max-w-36" title={selectedDevice.device_key}>
                       key: {selectedDevice.device_key}
                     </span>
                   )}
@@ -513,15 +578,15 @@ function TelemetryPageContent() {
               </div>
 
               {/* Metric Dropdown Selector / Custom Input */}
-              <div className="space-y-1.5 w-full sm:w-57.5 shrink-0">
+              <div className="space-y-1.5 lg:col-span-3">
                 <Label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 flex items-center justify-between">
                   <span className="flex items-center gap-1">
                     <Activity className="w-3.5 h-3.5 text-blue-500" />
                     Nama Metrik
                   </span>
                   {metricConfig.unit && (
-                    <span className="text-[11px] text-blue-500 font-medium">
-                      Satuan: {metricConfig.unit}
+                    <span className="text-[11px] text-blue-500 font-medium font-mono">
+                      ({metricConfig.unit})
                     </span>
                   )}
                 </Label>
@@ -535,6 +600,7 @@ function TelemetryPageContent() {
                       }
                       setMetricName(val);
                       setActivePresetMinutes(null);
+                      fetchTelemetry(0, false, { metric: val });
                     }}
                   >
                     <SelectTrigger className="w-full text-xs h-9">
@@ -560,7 +626,7 @@ function TelemetryPageContent() {
                           {systemMetrics.length > 0 && (
                             <SelectGroup>
                               <SelectLabel className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold flex items-center justify-between px-2 py-1">
-                                <span>Metrik di Sistem</span>
+                                <span>Metrik Aktif di Perangkat Ini</span>
                                 <span className="text-[10px] bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 px-1.5 py-0.2 rounded font-mono">
                                   {systemMetrics.length}
                                 </span>
@@ -638,13 +704,17 @@ function TelemetryPageContent() {
               </div>
 
               {/* Interval */}
-              <div className="space-y-1.5 w-full sm:w-40 shrink-0">
+              <div className="space-y-1.5 lg:col-span-2">
                 <Label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300">
                   Agregasi Interval
                 </Label>
                 <Select
                   value={aggInterval}
-                  onValueChange={(v) => setAggInterval(v as "raw" | "1m" | "1h")}
+                  onValueChange={(v) => {
+                    const newInt = v as "raw" | "1m" | "1h";
+                    setAggInterval(newInt);
+                    fetchTelemetry(0, false, { interval: newInt });
+                  }}
                 >
                   <SelectTrigger className="w-full text-xs h-9">
                     <SelectValue />
@@ -665,34 +735,32 @@ function TelemetryPageContent() {
             </div>
 
             {/* Filter Row 2: Metric Quick Chips & Time Presets */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-neutral-100 dark:border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-neutral-100 dark:border-slate-800">
               {/* Quick Metric Chips */}
               <div className="flex items-center flex-wrap gap-1.5">
                 <span className="text-[11px] font-semibold text-neutral-400 mr-1 flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-500" />
-                  Preset Metrik:
+                  Metrik:
                 </span>
-                {[
-                  { key: "temp", label: "Suhu (°C)" },
-                  { key: "humidity", label: "Kelembapan (%)" },
-                  { key: "voltage", label: "Tegangan (V)" },
-                  { key: "current", label: "Arus (A)" },
-                  { key: "power", label: "Daya (kW)" },
-                  { key: "pressure", label: "Tekanan (bar)" },
-                ].map((chip) => {
+                {displayedMetricChips.map((chip) => {
                   const isActive = metricName.toLowerCase() === chip.key.toLowerCase();
                   return (
                     <button
                       key={chip.key}
                       type="button"
                       onClick={() => handleSelectMetric(chip.key)}
-                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1 ${
                         isActive
                           ? "bg-blue-600 text-white shadow-xs"
                           : "bg-neutral-100 hover:bg-neutral-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-neutral-700 dark:text-slate-300"
                       }`}
                     >
-                      {chip.label}
+                      <span>{chip.label}</span>
+                      {chip.unit && (
+                        <span className={`text-[10px] ${isActive ? "text-blue-100" : "text-neutral-400"}`}>
+                          ({chip.unit})
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -702,7 +770,7 @@ function TelemetryPageContent() {
               <div className="flex items-center flex-wrap gap-1.5">
                 <span className="text-[11px] font-semibold text-neutral-400 mr-1 flex items-center gap-1">
                   <Calendar className="w-3 h-3 text-neutral-400" />
-                  Rentang Cepat:
+                  Rentang:
                 </span>
                 {TIME_PRESETS.map((preset) => {
                   const isActive = activePresetMinutes === preset.durationMinutes;
@@ -745,7 +813,7 @@ function TelemetryPageContent() {
 
             {/* Collapsible Custom Datetime Inputs */}
             {showCustomRange && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-neutral-50 dark:bg-slate-950/60 rounded-lg border border-neutral-200 dark:border-slate-800 mt-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-neutral-50 dark:bg-slate-900/60 rounded-lg border border-neutral-200 dark:border-slate-800 mt-2">
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold">Waktu Mulai (Start)</Label>
                   <Input
@@ -776,13 +844,13 @@ function TelemetryPageContent() {
             )}
 
             {/* Submit Action Bar */}
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-xs text-neutral-400">
-                Menampilkan data rentang:{" "}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 text-xs">
+              <span className="text-neutral-400">
+                Menampilkan rentang:{" "}
                 <strong className="text-neutral-700 dark:text-neutral-300">
                   {new Date(start).toLocaleDateString()} {new Date(start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </strong>{" "}
-                sampai{" "}
+                s/d{" "}
                 <strong className="text-neutral-700 dark:text-neutral-300">
                   {new Date(end).toLocaleDateString()} {new Date(end).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </strong>
@@ -795,8 +863,8 @@ function TelemetryPageContent() {
                   size="sm"
                   onClick={() => fetchTelemetry(page * pageSize)}
                   disabled={loading || !selectedDevice}
-                  className="text-xs h-9"
-                  title="Refresh manual"
+                  className="text-xs h-8"
+                  title="Refresh data"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
                   Refresh
@@ -805,12 +873,12 @@ function TelemetryPageContent() {
                   type="submit"
                   size="sm"
                   disabled={loading || !selectedDevice}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 px-4 flex items-center gap-1.5 shadow-xs"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 px-3.5 flex items-center gap-1.5 shadow-xs"
                 >
                   {loading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
-                    <Search className="w-4 h-4" />
+                    <Search className="w-3.5 h-3.5" />
                   )}
                   Tampilkan Telemetri
                 </Button>
@@ -824,35 +892,59 @@ function TelemetryPageContent() {
       {result && (
         <>
           {result.points.length === 0 ? (
-            <Card className="card mb-6 border border-dashed border-neutral-300 dark:border-slate-800">
-              <CardContent className="p-12 text-center flex flex-col items-center justify-center">
-                <div className="w-12 h-12 rounded-full bg-neutral-100 dark:bg-slate-800 flex items-center justify-center text-neutral-400 mb-3">
+            <Card className="mb-6 bg-white dark:bg-[#273142] border border-dashed border-neutral-300 dark:border-slate-800 rounded-xl shadow-xs">
+              <CardContent className="p-8 text-center flex flex-col items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center justify-center text-amber-600 dark:text-amber-400 mb-3">
                   <Activity className="w-6 h-6" />
                 </div>
                 <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
-                  Tidak Ada Titik Data Telemetri
+                  Tidak Ada Titik Data Telemetri ({result.metric_name})
                 </h4>
                 <p className="text-xs text-neutral-500 max-w-md mt-1 mb-4">
-                  Perangkat &quot;{selectedDevice?.name}&quot; belum mengirimkan data untuk metrik &quot;{result.metric_name}&quot; pada rentang waktu yang dipilih.
+                  Perangkat &quot;{selectedDevice?.name || "IoT"}&quot; belum memiliki catatan data untuk metrik &quot;{result.metric_name}&quot; pada rentang waktu yang dipilih.
                 </p>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
                     onClick={() => handleApplyPreset(1440, "1m")}
-                    className="text-xs"
+                    className="text-xs bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     Coba 24 Jam Terakhir
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleSelectMetric("temp")}
+                    onClick={() => handleApplyPreset(10080, "1h")}
                     className="text-xs"
                   >
-                    Reset ke Suhu (&apos;temp&apos;)
+                    Coba 7 Hari Terakhir
                   </Button>
                 </div>
+
+                {systemMetrics.length > 1 && (
+                  <div className="mt-4 pt-3 border-t border-neutral-100 dark:border-slate-800 w-full max-w-md">
+                    <p className="text-[11px] text-neutral-400 mb-2">Metrik lain yang aktif di perangkat ini:</p>
+                    <div className="flex flex-wrap items-center justify-center gap-1.5">
+                      {systemMetrics
+                        .filter((m) => m !== result.metric_name)
+                        .slice(0, 5)
+                        .map((m) => {
+                          const cfg = getMetricConfig(m);
+                          return (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => handleSelectMetric(m)}
+                              className="px-2.5 py-1 rounded text-[11px] bg-neutral-100 hover:bg-neutral-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-blue-600 dark:text-blue-400 font-mono transition-colors"
+                            >
+                              {cfg.name !== m ? cfg.name : m} {cfg.unit ? `(${cfg.unit})` : ""}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ) : (
@@ -900,7 +992,7 @@ function TelemetryPageContent() {
                 </div>
 
                 {/* Advanced Timeseries Line Chart */}
-                <Card className="card lg:col-span-3 border border-neutral-200 dark:border-slate-800 shadow-xs">
+                <Card className="lg:col-span-3 bg-white dark:bg-[#273142] border border-neutral-200 dark:border-slate-800 shadow-xs rounded-xl overflow-hidden">
                   <CardHeader className="p-4 pb-0 flex flex-row items-center justify-between">
                     <div>
                       <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -937,7 +1029,7 @@ function TelemetryPageContent() {
               </div>
 
               {/* 3. Detailed Data Table */}
-              <Card className="card border border-neutral-200 dark:border-slate-800 shadow-xs">
+              <Card className="bg-white dark:bg-[#273142] border border-neutral-200 dark:border-slate-800 shadow-xs rounded-xl overflow-hidden">
                 <CardHeader className="p-4 pb-2 border-b border-neutral-100 dark:border-slate-800 flex flex-row items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Layers className="w-4 h-4 text-indigo-500" />
@@ -1104,9 +1196,9 @@ function TelemetryPageContent() {
         </>
       )}
 
-      {/* Initial loading placeholder if metadata still loading */}
+      {/* Initial loading placeholder if still loading */}
       {!result && loading && (
-        <Card className="card mb-6 border border-neutral-200 dark:border-slate-800">
+        <Card className="mb-6 bg-white dark:bg-[#273142] border border-neutral-200 dark:border-slate-800 rounded-xl shadow-xs">
           <CardContent className="p-12 text-center flex flex-col items-center justify-center">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
             <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
@@ -1126,7 +1218,7 @@ export default function TelemetryPage() {
   return (
     <Suspense
       fallback={
-        <Card className="card mb-6 border border-neutral-200 dark:border-slate-800">
+        <Card className="mb-6 bg-white dark:bg-[#273142] border border-neutral-200 dark:border-slate-800 rounded-xl shadow-xs">
           <CardContent className="p-12 text-center flex flex-col items-center justify-center">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-3" />
             <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
