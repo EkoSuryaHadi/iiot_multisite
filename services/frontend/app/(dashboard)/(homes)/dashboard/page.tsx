@@ -10,6 +10,7 @@ import LoadingSkeleton from "@/components/loading-skeleton";
 import PowerFlowCard from "@/components/sps/power-flow-card";
 import GtaasSummaryCards from "@/components/sps/gtaas-summary-cards";
 import PmsHardwareStatusCard from "@/components/sps/pms-hardware-status-card";
+import PvHealthCard from "@/components/sps/pv-health-card";
 import { AutoRefreshProvider, useAutoRefresh } from "@/contexts/AutoRefreshContext";
 import { useTenantContext } from "@/contexts/TenantContext";
 import { spsApi } from "@/lib/api-client";
@@ -75,11 +76,18 @@ function DashboardContent() {
         </Suspense>
       </div>
 
-      {/* Monitoring & Status Section */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
+      {/* SPS & PMS Diagnostics (RKS 2.3.3.b & 2.3.3.c) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <Suspense fallback={<LoadingSkeleton />}>
+          <PvHealthCard />
+        </Suspense>
         <Suspense fallback={<LoadingSkeleton />}>
           <PmsHardwareStatusCard performance={performance} />
         </Suspense>
+      </div>
+
+      {/* Device & Telemetry Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <Suspense fallback={<LoadingSkeleton />}>
           <DeviceStatusCard />
         </Suspense>
