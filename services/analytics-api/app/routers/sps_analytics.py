@@ -266,19 +266,52 @@ def _load_site_sps_config(db: Session, tenant_slug: str, site_slug: str) -> dict
     return config
 
 
+def _fetch_online_devices(
+    client, tenant_slug: str, site_slug: str, threshold_seconds: int = 300
+) -> set[str]:
+    """Mengambil set device_key yang aktif mengirim data dalam threshold_seconds (default 5 menit)."""
+    try:
+        res = client.query(
+            "SELECT device_key "
+            "FROM telemetry "
+            "WHERE tenant_slug = {tenant_slug:String} AND site_slug = {site_slug:String} "
+            "  AND ts >= now() - INTERVAL 15 MINUTE "
+            "GROUP BY device_key "
+            "HAVING dateDiff('second', max(ts), now()) <= {threshold:Int32}",
+            parameters={
+                "tenant_slug": tenant_slug,
+                "site_slug": site_slug,
+                "threshold": threshold_seconds,
+            },
+        )
+        return {str(row[0]) for row in res.result_rows if row[0]}
+    except Exception:
+        return set()
+
+
 def _fetch_site_telemetry_snapshot(
-    tenant_slug: str, site_slug: str, start: datetime, end: datetime
+    tenant_slug: str,
+    site_slug: str,
+    start: datetime,
+    end: datetime,
+    online_devices: set[str] | list[str] | None = None,
 ) -> tuple[dict[str, float], dict[str, float]]:
     client = get_client()
-    res = client.query(
-        _LATEST_METRICS_SQL,
-        parameters={
-            "tenant_slug": tenant_slug,
-            "site_slug": site_slug,
-            "start": start,
-            "end": end,
-        },
-    )
+    sql = _LATEST_METRICS_SQL
+    params: dict[str, Any] = {
+        "tenant_slug": tenant_slug,
+        "site_slug": site_slug,
+        "start": start,
+        "end": end,
+    }
+    if online_devices:
+        sql = sql.replace(
+            "WHERE tenant_slug = {tenant_slug:String}",
+            "WHERE device_key IN {device_keys:Array(String)} AND tenant_slug = {tenant_slug:String}",
+        )
+        params["device_keys"] = list(online_devices)
+
+    res = client.query(sql, parameters=params)
     latest: dict[str, float] = {}
     averages: dict[str, float] = {}
     for row in res.result_rows:
@@ -289,10 +322,13 @@ def _fetch_site_telemetry_snapshot(
 
 
 def _fetch_alltime_sensor_inventory(
-    tenant_slug: str, site_slug: str, now: datetime
+    tenant_slug: str,
+    site_slug: str,
+    now: datetime,
+    online_devices: set[str] | list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, float], dict[str, float], bool, str | None]:
-    """Mengambil seluruh daftar sensor/metrik yang pernah masuk ke ClickHouse pada site ini,
-    sehingga penambahan sensor baru di masa depan otomatis terbaca tanpa hardcode.
+    """Mengambil daftar sensor/metrik dari ClickHouse pada site ini.
+    Hanya menyertakan sensor dari perangkat yang sedang online (jika online_devices dispesifikasikan).
     """
     client = get_client()
     sensor_list: list[dict[str, Any]] = []
@@ -300,11 +336,21 @@ def _fetch_alltime_sensor_inventory(
     hist_avg: dict[str, float] = {}
     newest_ts: datetime | None = None
 
-    try:
-        res = client.query(
-            _ALLTIME_METRICS_SQL,
-            parameters={"tenant_slug": tenant_slug, "site_slug": site_slug},
+    # Jika online_devices dispesifikasikan namun kosong (seluruh perangkat offline)
+    if online_devices is not None and len(online_devices) == 0:
+        return [], {}, {}, False, None
+
+    sql = _ALLTIME_METRICS_SQL
+    params: dict[str, Any] = {"tenant_slug": tenant_slug, "site_slug": site_slug}
+    if online_devices:
+        sql = sql.replace(
+            "WHERE tenant_slug = {tenant_slug:String}",
+            "WHERE device_key IN {device_keys:Array(String)} AND tenant_slug = {tenant_slug:String}",
         )
+        params["device_keys"] = list(online_devices)
+
+    try:
+        res = client.query(sql, parameters=params)
         for row in res.result_rows:
             if len(row) >= 6:
                 m_name = str(row[0])
@@ -321,6 +367,9 @@ def _fetch_alltime_sensor_inventory(
                 ts_val = None
                 dev_key = ""
             else:
+                continue
+
+            if online_devices and dev_key not in online_devices:
                 continue
 
             hist_latest[m_name] = l_val
@@ -502,22 +551,23 @@ def get_site_sps_performance(
     start_dt = start or (now - timedelta(hours=24))
     hours_window = max(1.0, (end_dt - start_dt).total_seconds() / 3600.0)
 
+    client = get_client()
+    online_devices = _fetch_online_devices(client, effective_tenant, effective_site, threshold_seconds=300)
+
     site_cfg = _load_site_sps_config(db, effective_tenant, effective_site)
-    latest, averages = _fetch_site_telemetry_snapshot(effective_tenant, effective_site, start_dt, end_dt)
+    latest, averages = _fetch_site_telemetry_snapshot(
+        effective_tenant, effective_site, start_dt, end_dt, online_devices=online_devices
+    )
     sensor_list, hist_latest, hist_avg, is_online, last_seen = _fetch_alltime_sensor_inventory(
-        effective_tenant, effective_site, now
+        effective_tenant, effective_site, now, online_devices=online_devices
     )
 
-    # Jika dalam window 24 jam tidak ada metrik (atau perangkat offline >24 jam),
-    # gunakan rata-rata & nilai terakhir historis dari ClickHouse agar data riil tetap terbaca.
-    if not latest and hist_latest:
+    # Jika seluruh perangkat offline (tidak ada device online), jangan gunakan data stale
+    # dari device offline untuk mengklaim sistem sedang aktif.
+    if not latest and hist_latest and not online_devices:
         latest = hist_latest
-    if not averages and hist_avg:
+    if not averages and hist_avg and not online_devices:
         averages = hist_avg
-    else:
-        for k, v in hist_avg.items():
-            if averages.get(k, 0.0) == 0.0 and v != 0.0:
-                averages[k] = v
 
     return _build_performance_payload(
         effective_tenant,
@@ -527,7 +577,7 @@ def get_site_sps_performance(
         averages,
         hours_window,
         sensor_metrics=sensor_list if sensor_list else None,
-        is_online=is_online if sensor_list else True,
+        is_online=is_online if online_devices else False,
         last_seen=last_seen,
     )
 
@@ -548,8 +598,13 @@ def get_site_sps_health(
     end_dt = end or (now + timedelta(minutes=1))
     start_dt = start or (now - timedelta(hours=24))
 
+    client = get_client()
+    online_devices = _fetch_online_devices(client, effective_tenant, effective_site, threshold_seconds=300)
+
     site_cfg = _load_site_sps_config(db, effective_tenant, effective_site)
-    latest_raw, averages_raw = _fetch_site_telemetry_snapshot(effective_tenant, effective_site, start_dt, end_dt)
+    latest_raw, averages_raw = _fetch_site_telemetry_snapshot(
+        effective_tenant, effective_site, start_dt, end_dt, online_devices=online_devices
+    )
     latest = _auto_map_sps_metrics(latest_raw)
     averages = _auto_map_sps_metrics(averages_raw)
 

@@ -326,13 +326,15 @@ export default function PowerFlowCard({
             </div>
           </div>
 
-          {/* Dynamic Auto-Discovered Sensor Metrics from ClickHouse */}
-          {sensors.length > 0 && (
+          {/* Dynamic Auto-Discovered Sensor Metrics from ClickHouse (Device Online Saja) */}
+          {sensors.length > 0 ? (
             <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
               <div className="flex items-center justify-between mb-2.5">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
                   <Database className="h-3.5 w-3.5 text-sky-500" />
-                  <span>Metrik & Sensor ClickHouse Terdeteksi Otomatis ({sensors.length} Tag)</span>
+                  <span>
+                    Metrik & Sensor Terdeteksi Otomatis ({sensors.length} Tag — Perangkat Online)
+                  </span>
                 </div>
                 {data?.last_seen && (
                   <span className="text-[11px] text-slate-400">
@@ -358,7 +360,10 @@ export default function PowerFlowCard({
                     <div className="text-[10px] text-slate-400 flex items-center justify-between mt-0.5">
                       <span>Avg: {s.avg_value}</span>
                       {s.device_key && (
-                        <span className="truncate max-w-16 text-[9px] opacity-75" title={s.device_key}>
+                        <span
+                          className="truncate max-w-16 text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold"
+                          title={s.device_key}
+                        >
                           {s.device_key}
                         </span>
                       )}
@@ -366,6 +371,11 @@ export default function PowerFlowCard({
                   </div>
                 ))}
               </div>
+            </div>
+          ) : (
+            <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 text-center py-2 flex items-center justify-center gap-2">
+              <Database className="h-3.5 w-3.5 text-slate-400" />
+              <span>Tidak ada data metrik — hanya perangkat yang berstatus online yang ditampilkan.</span>
             </div>
           )}
         </CardContent>
