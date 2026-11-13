@@ -36,6 +36,7 @@ import {
   TIME_PRESETS,
 } from "@/lib/telemetry-constants";
 import type { Device, Site, TelemetryResponse } from "@/lib/types";
+import { formatWita, parseTsUtc } from "@/lib/utils";
 import {
   Activity,
   ArrowUpDown,
@@ -1092,13 +1093,13 @@ function TelemetryPageContent() {
                               className="hover:bg-neutral-50 dark:hover:bg-slate-900/50"
                             >
                               <TableCell className="font-mono text-neutral-600 dark:text-neutral-300">
-                                {new Date(p.ts).toLocaleString()}
+                                {formatWita(p.ts)}
                               </TableCell>
                               <TableCell className="text-neutral-400">
                                 {(() => {
                                   try {
                                     const diffSec = Math.floor(
-                                      (Date.now() - new Date(p.ts).getTime()) / 1000
+                                      (Date.now() - parseTsUtc(p.ts).getTime()) / 1000
                                     );
                                     if (diffSec < 60) return `${diffSec} dtk lalu`;
                                     const diffMin = Math.floor(diffSec / 60);

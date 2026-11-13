@@ -1,5 +1,5 @@
 import React from "react";
-import { cn } from "@/lib/utils";
+import { cn, parseTsUtc } from "@/lib/utils";
 
 export interface StatusPulseProps {
   status: "online" | "offline" | "stale" | string;
@@ -42,7 +42,7 @@ export function StatusPulse({ status, showText = true, label, className }: Statu
 
 export function formatTimeAgo(dateInput: string | Date | number | null | undefined): string {
   if (!dateInput) return "-";
-  const date = typeof dateInput === "object" ? dateInput : new Date(dateInput);
+  const date = typeof dateInput === "object" ? dateInput : parseTsUtc(dateInput);
   const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
 
   if (diffSec < 60) return "Baru saja";

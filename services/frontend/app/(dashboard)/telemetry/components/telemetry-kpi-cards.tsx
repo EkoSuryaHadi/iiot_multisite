@@ -3,6 +3,7 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { TelemetryPoint } from "@/lib/types";
+import { formatWita } from "@/lib/utils";
 import {
   Activity,
   ArrowDownRight,
@@ -40,8 +41,7 @@ function formatRelativeTime(dateString: string): string {
 
 function formatTime(dateString: string): string {
   try {
-    const d = new Date(dateString);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    return formatWita(dateString, false);
   } catch {
     return "";
   }
