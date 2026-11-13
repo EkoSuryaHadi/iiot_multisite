@@ -9,6 +9,7 @@ networks:
     driver: bridge
 
 volumes:
+  analytics-spool:
   postgres-data:
   clickhouse-data:
   emqx1-data:
@@ -200,6 +201,7 @@ services:
       MYSQL_SINK_SSL_VERIFY_CERT: ${MYSQL_SINK_SSL_VERIFY_CERT:-false}
     volumes:
       - ./certs:/etc/ssl/certs/custom:ro
+      - analytics-spool:/var/lib/iiot/spool
     depends_on:
       clickhouse:
         condition: service_healthy
@@ -309,3 +311,4 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+

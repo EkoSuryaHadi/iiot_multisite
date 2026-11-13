@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     ingest_flush_interval_seconds: float = 2.0
     ingest_secret: str = "change_me_ingest_secret"
     ingest_max_buffered_rows: int = 100_000
+    # Spool disk (B1): kalau insert ke ClickHouse gagal, baris ditulis ke disk
+    # dan di-replay saat pulih — bukan dibuang diam-diam.
+    ingest_spool_dir: str = "/var/lib/iiot/spool"
+    ingest_spool_max_mb: int = 512
+    ingest_backoff_max_seconds: float = 60.0
 
     # Postgres (read-only) - dipakai untuk resolusi tenant_id (JWT) -> tenant_slug (ClickHouse).
     postgres_host: str = "postgres"

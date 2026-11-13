@@ -14,17 +14,32 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-os.environ.setdefault("CLICKHOUSE_HOST", "clickhouse")
-os.environ.setdefault("CLICKHOUSE_PORT", "8123")
-os.environ.setdefault("CLICKHOUSE_USER", "iiot")
-os.environ.setdefault("CLICKHOUSE_PASSWORD", "change_me_clickhouse")
-os.environ.setdefault("CLICKHOUSE_DB", "iiot_test")
-os.environ.setdefault("POSTGRES_HOST", "postgres")
-os.environ.setdefault("POSTGRES_PORT", "5432")
-os.environ.setdefault("POSTGRES_USER", "iiot")
-os.environ.setdefault("POSTGRES_PASSWORD", "change_me_postgres")
-os.environ.setdefault("POSTGRES_DB", "iiot_analytics_test")
-os.environ.setdefault("JWT_SECRET", "test_secret")
+# PELAJARAN 13 Nov 2026: `setdefault` TIDAK menimpa env produksi yang sudah ada
+# di container (CLICKHOUSE_DB=iiot, POSTGRES_DB=iiot), sehingga fixture test
+# menjalankan DROP DATABASE iiot -> ~961 ribu baris telemetry hilang.
+# Karena itu database test di-SET KERAS, bukan setdefault, plus guard di bawah.
+os.environ["CLICKHOUSE_HOST"] = "clickhouse"
+os.environ["CLICKHOUSE_PORT"] = "8123"
+os.environ["CLICKHOUSE_USER"] = "iiot"
+os.environ["CLICKHOUSE_PASSWORD"] = "change_me_clickhouse"
+os.environ["CLICKHOUSE_DB"] = "iiot_test"
+os.environ["POSTGRES_HOST"] = "postgres"
+os.environ["POSTGRES_PORT"] = "5432"
+os.environ["POSTGRES_USER"] = "iiot"
+os.environ["POSTGRES_PASSWORD"] = "change_me_postgres"
+os.environ["POSTGRES_DB"] = "iiot_analytics_test"
+os.environ["JWT_SECRET"] = "test_secret"
+
+# Guard: tolak keras kalau target test mengarah ke database produksi.
+_PRODUCTION_DBS = {"iiot", "gaungnusa", "postgres"}
+for _var in ("CLICKHOUSE_DB", "POSTGRES_DB"):
+    _val = os.environ.get(_var, "")
+    if _val.lower() in _PRODUCTION_DBS or "test" not in _val.lower():
+        raise RuntimeError(
+            f"REFUSAL conftest: {_var}='{_val}' bukan database test yang aman. "
+            "Fixture test ini bersifat destruktif (DROP DATABASE/TABLE). "
+            "Jangan pernah diarahkan ke database produksi."
+        )
 
 import app.clickhouse_client as ch_client_mod  # noqa: E402
 from app.buffer import device_status_buffer, telemetry_buffer  # noqa: E402
