@@ -86,12 +86,15 @@ export default function BillingStatementTable({
       {/* Action Buttons & Summary Strip */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm print:hidden">
         <div>
-          <span className="text-xs text-slate-500 block">Total Penghematan Efisiensi (Bulan Berjalan):</span>
+          <span className="text-xs text-slate-600 dark:text-slate-400 font-medium block">Total Penghematan Efisiensi (Bulan Berjalan):</span>
           <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
             Rp {totalCostAvoided.toLocaleString("id-ID")}
           </span>
-          <span className="text-xs text-slate-400 block mt-0.5">
-            Mitratel: Rp {mitratelShare.toLocaleString("id-ID")} ({sharingRatioPct}%) | Tenant: Rp {tenantShare.toLocaleString("id-ID")} ({100 - sharingRatioPct}%)
+          <span className="text-xs text-slate-600 dark:text-slate-300 block mt-0.5">
+            Mitratel: <strong className="text-slate-800 dark:text-slate-100">Rp {mitratelShare.toLocaleString("id-ID")}</strong> ({sharingRatioPct}%) | Tenant: <strong className="text-slate-800 dark:text-slate-100">Rp {tenantShare.toLocaleString("id-ID")}</strong> ({100 - sharingRatioPct}%)
+          </span>
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">
+            Formula bagi hasil efisiensi sesuai RKS Pasal 2.3.3.a (Tarif PLN acuan: Rp {plnTariffIdr.toLocaleString("id-ID")}/kWh)
           </span>
         </div>
 
