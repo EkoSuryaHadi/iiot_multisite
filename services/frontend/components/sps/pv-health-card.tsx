@@ -76,6 +76,11 @@ export default function PvHealthCard({
       ? Math.max(...pv.string_currents)
       : 0
 
+  const stringCount = Math.max(
+    pv?.string_currents?.length ?? 0,
+    pv?.string_voltages?.length ?? 0
+  )
+
   return (
     <Card className="border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -157,7 +162,7 @@ export default function PvHealthCard({
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
               )}
               <span className="font-medium text-[11px]">
-                Monitoring Arus Antar-String (RKS 2.4.2)
+                Monitoring Tegangan &amp; Arus Antar-String (RKS 2.3.3.a &amp; 2.4.2)
               </span>
             </div>
             <span
@@ -169,10 +174,12 @@ export default function PvHealthCard({
             </span>
           </div>
 
-          {/* String Currents Grid */}
-          {pv?.string_currents && pv.string_currents.length > 0 ? (
+          {/* String Voltages & Currents Grid */}
+          {stringCount > 0 ? (
             <div className="grid grid-cols-4 gap-1.5 mt-2">
-              {pv.string_currents.map((current, idx) => {
+              {Array.from({ length: stringCount }).map((_, idx) => {
+                const current = pv?.string_currents?.[idx] ?? 0
+                const voltage = pv?.string_voltages?.[idx] ?? 0
                 const isUnderperforming =
                   maxStringCurrent > 0 &&
                   ((maxStringCurrent - current) / maxStringCurrent) * 100 > 5.0
@@ -186,6 +193,7 @@ export default function PvHealthCard({
                     }`}
                   >
                     <div className="text-[9px] text-slate-400">Str {idx + 1}</div>
+                    <div className="font-semibold text-amber-600 dark:text-amber-400">{voltage.toFixed(1)} V</div>
                     <div>{current.toFixed(1)} A</div>
                   </div>
                 )

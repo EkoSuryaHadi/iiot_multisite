@@ -63,10 +63,12 @@ def evaluate_pv_health(
     irradiance_kwh_m2: float,
     pv_capacity_kwp: float,
     string_currents: list[float] | None = None,
+    string_voltages: list[float] | None = None,
 ) -> dict[str, Any]:
     """Mengevaluasi kesehatan PV Array (RKS Pasal 2.3.3.b):
     - Perbandingan iradiasi sensor vs produksi kWh aktual (PR)
     - Deteksi anomali arus antar string PV (> 5%)
+    - Pencatatan tegangan & arus per string PV (RKS Pasal 2.3.3.a)
     """
     pr_pct = calculate_performance_ratio(actual_solar_kwh, irradiance_kwh_m2, pv_capacity_kwp)
     is_string_anomaly, max_dev_pct = detect_string_anomaly(string_currents or [])
@@ -97,6 +99,7 @@ def evaluate_pv_health(
         "string_anomaly": is_string_anomaly,
         "max_string_deviation_pct": max_dev_pct,
         "string_currents": [round(float(x), 2) for x in (string_currents or [])],
+        "string_voltages": [round(float(x), 2) for x in (string_voltages or [])],
     }
 
 

@@ -50,10 +50,12 @@ def test_pv_and_mppt_health_evaluation():
         irradiance_kwh_m2=5.0,
         pv_capacity_kwp=5.85,
         string_currents=[16.0, 16.1],
+        string_voltages=[185.0, 184.5],
     )
     assert pv_health["status"] == "HEALTHY"
     assert pv_health["string_anomaly"] is False
     assert pv_health["health_index"] >= 80.0
+    assert pv_health["string_voltages"] == [185.0, 184.5]
 
     # MPPT normal: efisiensi > 97%, suhu < 70C, tegangan +0.7V di atas float rectifier
     mppt_ok = evaluate_mppt_health(
@@ -96,6 +98,8 @@ async def test_sps_performance_and_health_endpoints(client, ch_client, tenant_a)
         ("acme", "site-jkt-01", "mppt-01", "i_rectifier", 12.0, now, ""),
         ("acme", "site-jkt-01", "mppt-01", "p_rectifier", 649.2, now, ""),
         ("acme", "site-jkt-01", "mppt-01", "temp_mppt", 43.5, now, ""),
+        ("acme", "site-jkt-01", "mppt-01", "v_pv_string1", 185.0, now, ""),
+        ("acme", "site-jkt-01", "mppt-01", "v_pv_string2", 184.5, now, ""),
         ("acme", "site-jkt-01", "mppt-01", "i_pv_string1", 8.1, now, ""),
         ("acme", "site-jkt-01", "mppt-01", "i_pv_string2", 8.0, now, ""),
     ]
@@ -117,6 +121,8 @@ async def test_sps_performance_and_health_endpoints(client, ch_client, tenant_a)
     assert perf_data["power_flow"]["p_rectifier"] == 649.2
     assert perf_data["power_flow"]["v_mppt_out"] == 54.2
     assert perf_data["solar_contribution_pct"] > 0
+    assert perf_data["monthly_solar_kwh"] >= perf_data["solar_kwh"]
+    assert perf_data["cumulative_solar_kwh"] >= perf_data["monthly_solar_kwh"]
 
     health_res = await client.get("/api/sps/sites/site-jkt-01/health", headers=headers)
     assert health_res.status_code == 200, health_res.text
@@ -126,6 +132,8 @@ async def test_sps_performance_and_health_endpoints(client, ch_client, tenant_a)
     assert "mppt_health" in health_data
     assert health_data["mppt_health"]["is_efficiency_ok"] is True
     assert health_data["pv_health"]["string_anomaly"] is False
+    assert health_data["pv_health"]["string_voltages"] == [185.0, 184.5]
+    assert health_data["pv_health"]["string_currents"] == [8.1, 8.0]
 
 
 async def test_dynamic_clickhouse_sensor_auto_mapping(client, ch_client, tenant_a):

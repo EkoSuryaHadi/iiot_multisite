@@ -52,6 +52,9 @@ export default function GtaasSummaryCards({
 
   const p = externalPerformance ?? internalPerf
   const solarKwh = Number(p?.solar_kwh ?? 0)
+  const monthlySolarKwh = Number(p?.monthly_solar_kwh ?? solarKwh)
+  const cumulativeSolarKwh = Number(p?.cumulative_solar_kwh ?? monthlySolarKwh)
+  const gridKwh = Number(p?.grid_kwh ?? 0)
   const loadKwh = Number(p?.load_kwh ?? 0)
   const costAvoidedIdr = Number(p?.pln_cost_avoided_idr ?? 0)
   const scrPct = Number(p?.solar_contribution_pct ?? 0)
@@ -63,7 +66,7 @@ export default function GtaasSummaryCards({
     {
       title: "Solar Energy Generated",
       value: loading ? "..." : `${solarKwh.toFixed(2)} kWh`,
-      subtitle: `24 Jam Terakhir (Total beban: ${loadKwh.toFixed(2)} kWh)`,
+      subtitle: `Harian · Bln: ${monthlySolarKwh.toFixed(1)} · Kum: ${cumulativeSolarKwh.toFixed(1)} kWh`,
       icon: Sun,
       color: "text-amber-500",
       bgColor: "bg-amber-500/10",
@@ -73,7 +76,7 @@ export default function GtaasSummaryCards({
     {
       title: "PLN Cost Avoided",
       value: loading ? "..." : `Rp ${Math.round(costAvoidedIdr).toLocaleString("id-ID")}`,
-      subtitle: `Tarif PLN B3/I3 (Rp 1.444,70 / kWh)`,
+      subtitle: `Grid PLN: ${gridKwh.toFixed(2)} kWh (Total beban: ${loadKwh.toFixed(2)} kWh)`,
       icon: DollarSign,
       color: "text-emerald-500",
       bgColor: "bg-emerald-500/10",

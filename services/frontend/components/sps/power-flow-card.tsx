@@ -185,15 +185,25 @@ export default function PowerFlowCard({
                 </div>
                 <div className="mt-2 text-[10px] text-slate-500 space-y-0.5">
                   <div className="flex justify-between">
-                    <span>Tegangan:</span>{" "}
+                    <span>Tegangan String:</span>{" "}
                     <strong className="text-slate-700 dark:text-slate-300">
-                      {(pf?.v_pv ?? 0).toFixed(1)} V
+                      {(pf?.string_voltages?.length ?? 0) > 1
+                        ? pf!.string_voltages!.map((v) => `${v.toFixed(0)}V`).join("/")
+                        : `${(pf?.v_pv ?? 0).toFixed(1)} V`}
                     </strong>
                   </div>
                   <div className="flex justify-between">
-                    <span>Arus DC:</span>{" "}
+                    <span>Arus DC String:</span>{" "}
                     <strong className="text-slate-700 dark:text-slate-300">
-                      {(pf?.i_pv ?? 0).toFixed(1)} A
+                      {(pf?.string_currents?.length ?? 0) > 1
+                        ? pf!.string_currents!.map((a) => `${a.toFixed(1)}A`).join("/")
+                        : `${(pf?.i_pv ?? 0).toFixed(1)} A`}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Energi (H/B/K):</span>{" "}
+                    <strong className="text-amber-600 dark:text-amber-400">
+                      {(data?.solar_kwh ?? 0).toFixed(1)}/{(data?.monthly_solar_kwh ?? data?.solar_kwh ?? 0).toFixed(1)}/{(data?.cumulative_solar_kwh ?? data?.solar_kwh ?? 0).toFixed(1)} kWh
                     </strong>
                   </div>
                 </div>
@@ -233,6 +243,12 @@ export default function PowerFlowCard({
                     <span>Arus Suplai:</span>{" "}
                     <strong className="text-slate-700 dark:text-slate-300">
                       {(pf?.i_mppt_out ?? 0).toFixed(1)} A
+                    </strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Energi Output:</span>{" "}
+                    <strong className="text-emerald-600 dark:text-emerald-400">
+                      {(data?.solar_kwh ?? 0).toFixed(2)} kWh
                     </strong>
                   </div>
                 </div>
@@ -282,6 +298,12 @@ export default function PowerFlowCard({
                     <span>Suplai Sisa:</span>
                     <strong className="text-sky-600 dark:text-sky-400">
                       {((pf?.p_rectifier || 0) / 1000).toFixed(2)} kW ({(pf?.i_rectifier ?? 0).toFixed(2)} A)
+                    </strong>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-0.5">
+                    <span>Konsumsi PLN (24j):</span>
+                    <strong className="text-slate-700 dark:text-slate-300">
+                      {(data?.grid_kwh ?? 0).toFixed(2)} kWh
                     </strong>
                   </div>
                 </div>

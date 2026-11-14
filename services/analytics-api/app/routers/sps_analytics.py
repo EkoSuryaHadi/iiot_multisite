@@ -1,4 +1,5 @@
 import math
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -75,12 +76,26 @@ def _auto_map_sps_metrics(raw: dict[str, float]) -> dict[str, float]:
             continue
         k_low = k.lower().strip()
 
+        # 0a. Pemetaan per-string PV Voltage & Current (string 1..8) sesuai RKS Pasal 2.3.3.a & 2.4.2
+        m_v_str = re.match(r"^(?:v_?pv_?(?:string|str)?|pv_?(?:string|str)?_?volt(?:age)?)_?([1-8])$", k_low)
+        if m_v_str:
+            norm_v = round(v / 100.0, 2) if v > 1000.0 else v
+            _set_if_zero(f"v_pv_string{m_v_str.group(1)}", norm_v)
+        m_i_str = re.match(r"^(?:i_?pv_?(?:string|str)?|pv_?(?:string|str)?_?curr(?:ent)?)_?([1-8])$", k_low)
+        if m_i_str:
+            norm_i = round(v / 100.0, 2) if v > 500.0 else v
+            _set_if_zero(f"i_pv_string{m_i_str.group(1)}", norm_i)
+
         # 0. Input AC PLN / Grid — dipetakan lebih dulu agar tegangan AC PLN (228 V)
         #    tidak tertukar dengan tegangan DC busbar (float 53,5 V).
         #    Kata kunci Inggris + Indonesia (Tegangan/Arus/Frekuensi/Daya) karena
         #    firmware GNIS mengirim nama metrik berbahasa Indonesia.
         if "pln" in k_low or "grid" in k_low or "utility" in k_low:
-            if "volt" in k_low or "tegangan" in k_low:
+            if ("total" in k_low or "kumulatif" in k_low or "cum" in k_low) and (
+                "pemakaian" in k_low or "kwh" in k_low or "energy" in k_low or "daya" in k_low
+            ):
+                _set_if_zero("cumulative_grid_kwh_sensor", v)
+            elif "volt" in k_low or "tegangan" in k_low:
                 _set_if_zero("v_pln", v)
             elif "curr" in k_low or "amp" in k_low or "arus" in k_low:
                 _set_if_zero("i_rectifier", v)
@@ -88,6 +103,13 @@ def _auto_map_sps_metrics(raw: dict[str, float]) -> dict[str, float]:
                 _set_if_zero("freq_pln", v)
             elif "power" in k_low or "watt" in k_low or "daya" in k_low:
                 _set_if_zero("p_rectifier", v)
+            continue
+
+        # 0b. Kumulatif Energi Surya dari sensor bila dikirim langsung
+        if k_low in ("total_solar_kwh", "e_pv_total", "cumulative_solar_kwh", "solar_kwh_total") or (
+            ("solar" in k_low or "pv" in k_low) and ("total" in k_low or "cum" in k_low) and ("kwh" in k_low or "energy" in k_low)
+        ):
+            _set_if_zero("cumulative_solar_kwh_sensor", v)
             continue
 
         # 1. PV Voltage
@@ -405,6 +427,142 @@ def _fetch_alltime_sensor_inventory(
     return sensor_list, hist_latest, hist_avg, is_online, last_seen_iso
 
 
+def _extract_string_arrays(
+    mapped: dict[str, float],
+    v_pv: float,
+    i_pv: float,
+) -> tuple[list[float], list[float]]:
+    """Mengekstrak array tegangan (V) dan arus (A) per string PV 1..8 (RKS 2.3.3.a & 2.4.2)."""
+    string_voltages: list[float] = []
+    string_currents: list[float] = []
+    for idx in range(1, 9):
+        v_key = f"v_pv_string{idx}"
+        i_key = f"i_pv_string{idx}"
+        if v_key in mapped:
+            string_voltages.append(round(mapped[v_key], 2))
+        if i_key in mapped:
+            string_currents.append(round(mapped[i_key], 2))
+    if not string_voltages and v_pv > 0.0:
+        string_voltages = [round(v_pv, 2)]
+    if not string_currents and i_pv > 0.0:
+        string_currents = [round(i_pv, 2)]
+    return string_voltages, string_currents
+
+
+def _fetch_energy_aggregates(
+    client: Any,
+    tenant_slug: str,
+    site_slug: str,
+    daily_solar_kwh: float,
+    daily_grid_kwh: float,
+    mapped_latest: dict[str, float],
+) -> dict[str, float]:
+    """Mengambil total energi bulanan (bulan berjalan) & kumulatif dari ClickHouse."""
+    monthly_solar = 0.0
+    monthly_grid = 0.0
+    cum_solar = 0.0
+    cum_grid = 0.0
+
+    today = datetime.now(timezone.utc).date()
+    month_start = today.replace(day=1)
+
+    try:
+        res = client.query(
+            """
+            SELECT
+                sumIf(solar_kwh, date >= {month_start:Date}) AS month_solar,
+                sumIf(grid_kwh, date >= {month_start:Date}) AS month_grid,
+                sum(solar_kwh) AS total_solar,
+                sum(grid_kwh) AS total_grid
+            FROM sps_daily_energy FINAL
+            WHERE tenant_slug = {tenant_slug:String}
+              AND site_slug = {site_slug:String}
+            """,
+            parameters={
+                "tenant_slug": tenant_slug,
+                "site_slug": site_slug,
+                "month_start": month_start,
+            },
+        )
+        if res.result_rows:
+            row = res.result_rows[0]
+            monthly_solar = _sanitize_val(row[0])
+            monthly_grid = _sanitize_val(row[1])
+            cum_solar = _sanitize_val(row[2])
+            cum_grid = _sanitize_val(row[3])
+    except Exception:
+        pass
+
+    # Fallback dari tabel telemetry harian jika sps_daily_energy belum terisi
+    if cum_solar == 0.0 and cum_grid == 0.0:
+        try:
+            raw_daily = client.query(
+                """
+                SELECT
+                    toDate(ts) AS day,
+                    metric_name,
+                    avgIf(metric_value, abs(metric_value) < 10000000) AS avg_val
+                FROM telemetry
+                WHERE tenant_slug = {tenant_slug:String}
+                  AND site_slug = {site_slug:String}
+                GROUP BY day, metric_name
+                """,
+                parameters={"tenant_slug": tenant_slug, "site_slug": site_slug},
+            )
+            by_day: dict[str, dict[str, float]] = {}
+            for row in raw_daily.result_rows:
+                if len(row) >= 3:
+                    by_day.setdefault(str(row[0]), {})[str(row[1])] = _sanitize_val(row[2])
+
+            month_prefix = month_start.strftime("%Y-%m")
+            for d_str, raw_map in by_day.items():
+                mapped = _auto_map_sps_metrics(raw_map)
+                v_pv_d = mapped.get("v_pv", 0.0)
+                i_pv_d = mapped.get("i_pv", 0.0)
+                p_pv_d = mapped.get("p_pv", round(v_pv_d * i_pv_d, 2))
+                v_mppt_d = mapped.get("v_mppt_out", 0.0)
+                i_mppt_d = mapped.get("i_mppt_out", 0.0)
+                p_mppt_d = mapped.get("p_mppt_out", round(v_mppt_d * i_mppt_d, 2))
+                if p_mppt_d == 0.0 and p_pv_d > 0.0:
+                    p_mppt_d = round(p_pv_d * 0.98, 2)
+                if p_mppt_d == 0.0 and v_pv_d > 10.0:
+                    p_mppt_d = round(v_pv_d * 8.5, 2)
+
+                v_pln_d = mapped.get("v_pln", 0.0)
+                v_bus_d = mapped.get("v_busbar", 53.5)
+                i_rect_d = mapped.get("i_rectifier", 0.0)
+                p_rect_d = (
+                    round((v_pln_d if v_pln_d > 0.0 else v_bus_d) * i_rect_d, 2)
+                    if i_rect_d > 0.0
+                    else mapped.get("p_rectifier", 0.0)
+                )
+
+                s_kwh = round((p_mppt_d / 1000.0) * 8.0, 3)
+                g_kwh = round((p_rect_d / 1000.0) * 16.0, 3)
+                cum_solar += s_kwh
+                cum_grid += g_kwh
+                if d_str.startswith(month_prefix):
+                    monthly_solar += s_kwh
+                    monthly_grid += g_kwh
+        except Exception:
+            pass
+
+    sensor_cum_solar = mapped_latest.get("cumulative_solar_kwh_sensor", 0.0)
+    sensor_cum_grid = mapped_latest.get("cumulative_grid_kwh_sensor", 0.0)
+
+    monthly_solar = round(max(monthly_solar, daily_solar_kwh), 3)
+    monthly_grid = round(max(monthly_grid, daily_grid_kwh), 3)
+    cum_solar = round(max(cum_solar, monthly_solar, sensor_cum_solar), 3)
+    cum_grid = round(max(cum_grid, monthly_grid, sensor_cum_grid), 3)
+
+    return {
+        "monthly_solar_kwh": monthly_solar,
+        "cumulative_solar_kwh": cum_solar,
+        "monthly_grid_kwh": monthly_grid,
+        "cumulative_grid_kwh": cum_grid,
+    }
+
+
 def _build_performance_payload(
     tenant_slug: str,
     site_slug: str,
@@ -415,6 +573,7 @@ def _build_performance_payload(
     sensor_metrics: list[dict[str, Any]] | None = None,
     is_online: bool | None = None,
     last_seen: str | None = None,
+    energy_aggregates: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     mapped_latest = _auto_map_sps_metrics(latest)
     mapped_avg = _auto_map_sps_metrics(averages)
@@ -489,6 +648,14 @@ def _build_performance_payload(
             for k, v in sorted(latest.items())
         ]
 
+    string_voltages, string_currents = _extract_string_arrays(mapped_latest, v_pv, i_pv)
+    agg = energy_aggregates or {
+        "monthly_solar_kwh": solar_kwh,
+        "cumulative_solar_kwh": round(max(solar_kwh, mapped_latest.get("cumulative_solar_kwh_sensor", 0.0)), 3),
+        "monthly_grid_kwh": grid_kwh,
+        "cumulative_grid_kwh": round(max(grid_kwh, mapped_latest.get("cumulative_grid_kwh_sensor", 0.0)), 3),
+    }
+
     return {
         "tenant_slug": tenant_slug,
         "site_slug": site_slug,
@@ -496,7 +663,11 @@ def _build_performance_payload(
         "last_seen": last_seen,
         "site_config": site_cfg,
         "solar_kwh": solar_kwh,
+        "monthly_solar_kwh": agg["monthly_solar_kwh"],
+        "cumulative_solar_kwh": agg["cumulative_solar_kwh"],
         "grid_kwh": grid_kwh,
+        "monthly_grid_kwh": agg["monthly_grid_kwh"],
+        "cumulative_grid_kwh": agg["cumulative_grid_kwh"],
         "load_kwh": load_kwh,
         "solar_contribution_pct": scr_pct,
         "performance_ratio_pct": pr_pct,
@@ -506,6 +677,8 @@ def _build_performance_payload(
             "v_pv": round(v_pv, 2),
             "i_pv": round(i_pv, 2),
             "p_pv": round(p_pv, 2),
+            "string_voltages": string_voltages,
+            "string_currents": string_currents,
             "v_mppt_out": round(v_mppt_out, 2),
             "i_mppt_out": round(i_mppt_out, 2),
             "p_mppt_out": round(p_mppt_out, 2),
@@ -569,7 +742,7 @@ def get_site_sps_performance(
     if not averages and hist_avg and not online_devices:
         averages = hist_avg
 
-    return _build_performance_payload(
+    payload = _build_performance_payload(
         effective_tenant,
         effective_site,
         site_cfg,
@@ -580,6 +753,16 @@ def get_site_sps_performance(
         is_online=is_online if online_devices else False,
         last_seen=last_seen,
     )
+    agg = _fetch_energy_aggregates(
+        client,
+        effective_tenant,
+        effective_site,
+        payload["solar_kwh"],
+        payload["grid_kwh"],
+        _auto_map_sps_metrics(latest),
+    )
+    payload.update(agg)
+    return payload
 
 
 @router.get("/api/sps/sites/{site_slug}/health")
@@ -618,11 +801,7 @@ def get_site_sps_health(
     avg_irr = averages.get("irradiance", latest.get("irradiance", 0.0))
     avg_p_mppt = averages.get("p_mppt_out", p_mppt_out)
 
-    string_currents: list[float] = []
-    for idx in range(1, 9):
-        key = f"i_pv_string{idx}"
-        if key in latest:
-            string_currents.append(latest[key])
+    string_voltages, string_currents = _extract_string_arrays(latest, v_pv, i_pv)
 
     solar_kwh = latest.get("solar_kwh", round(avg_p_mppt / 1000.0, 3))
     irradiance_kwh_m2 = round(avg_irr / 1000.0, 3)
@@ -632,6 +811,7 @@ def get_site_sps_health(
         irradiance_kwh_m2=irradiance_kwh_m2,
         pv_capacity_kwp=site_cfg["pv_capacity_kwp"],
         string_currents=string_currents,
+        string_voltages=string_voltages,
     )
     mppt_health = evaluate_mppt_health(
         p_pv=p_pv,

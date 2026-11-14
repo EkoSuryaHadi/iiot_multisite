@@ -132,6 +132,8 @@ export interface SpsPowerFlow {
   v_pv: number
   i_pv: number
   p_pv: number
+  string_voltages?: number[]
+  string_currents?: number[]
   v_mppt_out: number
   i_mppt_out: number
   p_mppt_out: number
@@ -182,7 +184,11 @@ export interface SpsPerformanceResponse {
     baseline_kwh_daily: number
   }
   solar_kwh: number
+  monthly_solar_kwh?: number
+  cumulative_solar_kwh?: number
   grid_kwh: number
+  monthly_grid_kwh?: number
+  cumulative_grid_kwh?: number
   load_kwh: number
   solar_contribution_pct: number
   performance_ratio_pct: number
@@ -201,6 +207,7 @@ export interface SpsPvHealth {
   string_anomaly: boolean
   max_string_deviation_pct: number
   string_currents: number[]
+  string_voltages?: number[]
 }
 
 export interface SpsMpptHealth {
