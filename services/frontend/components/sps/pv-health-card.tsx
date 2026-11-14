@@ -200,9 +200,18 @@ export default function PvHealthCard({
               })}
             </div>
           ) : (
-            <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
-              <Layers className="h-3 w-3" />
-              <span>Deviasi string normal (toleransi ≤ 5% terpenuhi).</span>
+            <div className="mt-2 space-y-1.5">
+              <div className="grid grid-cols-4 gap-1.5">
+                <div className="p-1.5 rounded border border-dashed border-slate-300 dark:border-slate-700 bg-white/50 dark:bg-slate-900/40 text-center font-mono text-[10px] text-slate-400">
+                  <div className="text-[9px]">Str 1</div>
+                  <div className="font-semibold">0.0 V</div>
+                  <div>0.0 A</div>
+                </div>
+              </div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Layers className="h-3 w-3 shrink-0" />
+                <span>Belum ada data string aktif (Perangkat Offline / Tegangan PV 0 V).</span>
+              </div>
             </div>
           )}
         </div>
