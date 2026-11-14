@@ -34,8 +34,8 @@ import {
 } from "@/components/ui/table";
 import { SiteMapView } from "@/components/sites/site-map-view";
 import { useTenantContext } from "@/contexts/TenantContext";
-import { ApiRequestError, devicesApi, sitesApi } from "@/lib/api-client";
-import type { Device, Site } from "@/lib/types";
+import { ApiRequestError, analyticsApi, devicesApi, sitesApi } from "@/lib/api-client";
+import type { Device, DeviceStatusItem, Site } from "@/lib/types";
 import {
   ExternalLink,
   Loader2,
@@ -622,6 +622,7 @@ function SitesPageContent() {
   const { isSuperadmin, selectedTenant } = useTenantContext();
   const [sites, setSites] = useState<Site[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [deviceStatuses, setDeviceStatuses] = useState<Record<string, DeviceStatusItem>>({});
   const [loading, setLoading] = useState(true);
   const [editingSite, setEditingSite] = useState<Site | null>(null);
 
@@ -629,15 +630,29 @@ function SitesPageContent() {
     if (isSuperadmin && !selectedTenant) {
       setSites([]);
       setDevices([]);
+      setDeviceStatuses({});
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const [allSites, allDevices] = await Promise.all([
+      const [allSites, allDevices, statusRes] = await Promise.all([
         sitesApi.list(),
         devicesApi.list().catch(() => [] as Device[]),
+        analyticsApi
+          .getDevicesStatus({
+            tenant_slug: isSuperadmin ? selectedTenant?.slug : undefined,
+            limit: 200,
+          })
+          .catch(() => null),
       ]);
+      const statusMap: Record<string, DeviceStatusItem> = {};
+      if (statusRes?.devices) {
+        for (const item of statusRes.devices) {
+          statusMap[item.device_key] = item;
+        }
+      }
+      setDeviceStatuses(statusMap);
       setSites(isSuperadmin && selectedTenant ? allSites.filter((s) => s.tenant_id === selectedTenant.id) : allSites);
       setDevices(isSuperadmin && selectedTenant ? allDevices.filter((d) => d.tenant_id === selectedTenant.id) : allDevices);
     } catch (error) {
@@ -692,7 +707,7 @@ function SitesPageContent() {
 
       {!loading && sites.length > 0 && (
         <div className="mb-6">
-          <SiteMapView sites={sites} devices={devices} />
+          <SiteMapView sites={sites} devices={devices} deviceStatuses={deviceStatuses} />
         </div>
       )}
 

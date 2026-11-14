@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { Device, Site } from "@/lib/types";
+import type { Device, DeviceStatusItem, Site } from "@/lib/types";
 import { ExternalLink, Factory, MapPin, Radio, Server, Signal, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -72,17 +72,23 @@ function calculateCoordinates(s: Site, index: number): { x: number; y: number } 
 export function SiteMapView({
   sites = [],
   devices = [],
+  deviceStatuses,
 }: {
   sites: Site[];
   devices?: Device[];
+  deviceStatuses?: Record<string, DeviceStatusItem>;
 }) {
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(sites[0]?.id || null);
 
-  // Map sites with coordinates and device counts
+  // Map sites with coordinates and live device connection counts
   const sitesWithCoords: SiteWithLocation[] = sites.map((s, index) => {
     const coords = calculateCoordinates(s, index);
     const siteDevices = devices.filter((d) => d.site_id === s.id);
-    const onlineDevices = siteDevices.filter((d) => d.is_active);
+    const onlineDevices = siteDevices.filter((d) => {
+      if (!d.is_active) return false;
+      const st = deviceStatuses?.[d.device_key];
+      return st?.status === "online";
+    });
 
     return {
       ...s,
@@ -114,12 +120,12 @@ export function SiteMapView({
       <CardContent className="p-0">
         <div className="grid grid-cols-1 lg:grid-cols-4 min-h-85">
           {/* Map Interactive Canvas */}
-          <div className="lg:col-span-3 relative bg-slate-900 overflow-hidden flex flex-col justify-between p-4">
+          <div className="lg:col-span-3 relative bg-linear-to-br from-sky-50 via-blue-50/80 to-cyan-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 overflow-hidden flex flex-col justify-between p-4">
             {/* Background Grid Accent */}
             <div
-              className="absolute inset-0 opacity-15"
+              className="absolute inset-0 opacity-20"
               style={{
-                backgroundImage: "radial-gradient(#38bdf8 1px, transparent 1px)",
+                backgroundImage: "radial-gradient(#0284c7 1px, transparent 1px)",
                 backgroundSize: "24px 24px",
               }}
             />
@@ -128,7 +134,8 @@ export function SiteMapView({
             <div className="relative w-full flex items-center justify-center py-2">
               <svg
                 viewBox="0 0 1000 450"
-                className="w-full h-auto max-h-75 text-slate-800 fill-current opacity-70 select-none"
+                className="w-full h-auto max-h-75 text-emerald-200 dark:text-slate-700 fill-current stroke-emerald-500/50 dark:stroke-slate-500 select-none"
+                strokeWidth={2}
               >
                 {/* Sumatra */}
                 <path d="M70,80 L220,240 L190,280 L160,260 L60,110 Z" />
@@ -191,19 +198,19 @@ export function SiteMapView({
                     {/* Tooltip on pin */}
                     <div
                       className={cn(
-                        "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 rounded-md bg-slate-950/95 text-white text-[11px] font-medium whitespace-nowrap shadow-xl pointer-events-none transition-all z-30 border border-slate-700",
+                        "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 rounded-md bg-white/95 dark:bg-slate-900/95 text-slate-900 dark:text-white text-[11px] font-medium whitespace-nowrap shadow-lg pointer-events-none transition-all z-30 border border-slate-200 dark:border-slate-700",
                         isSelected ? "opacity-100 scale-100" : "opacity-0 group-hover:opacity-100 scale-95"
                       )}
                     >
                       <div className="flex items-center gap-1.5 font-semibold">
                         <span>{site.name}</span>
                         {site.site_type && (
-                          <span className="text-[9px] bg-slate-800 text-sky-300 px-1 py-0.5 rounded">
+                          <span className="text-[9px] bg-sky-100 text-sky-700 dark:bg-slate-800 dark:text-sky-300 px-1 py-0.5 rounded">
                             {site.site_type}
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-400">
+                      <div className="text-[10px] text-slate-600 dark:text-slate-300">
                         {site.devicesCount} devices ({site.onlineCount} online)
                       </div>
                     </div>
@@ -213,7 +220,7 @@ export function SiteMapView({
             </div>
 
             {/* Map Legend */}
-            <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80 text-[10px] text-slate-400">
+            <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-sky-200/80 dark:border-slate-800/80 text-[10px] text-slate-700 dark:text-slate-300 font-medium">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="flex items-center gap-1">
                   <span className="size-2 rounded-full bg-emerald-500 inline-block" /> Semua Online
@@ -231,7 +238,7 @@ export function SiteMapView({
                   <span className="size-2 rounded-full bg-neutral-500 inline-block" /> Nonaktif
                 </span>
               </div>
-              <span className="text-[10px] text-slate-500">Klik pin untuk rincian</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">Klik pin untuk rincian</span>
             </div>
           </div>
 
@@ -273,7 +280,7 @@ export function SiteMapView({
                   </div>
                   <div className="flex items-center justify-between text-neutral-600 dark:text-neutral-400">
                     <span className="flex items-center gap-1.5">
-                      <Signal className="size-3.5 text-emerald-500" />
+                      <Signal className={cn("size-3.5", activeSite.onlineCount > 0 ? "text-emerald-500" : "text-rose-500")} />
                       Status Koneksi:
                     </span>
                     <span
