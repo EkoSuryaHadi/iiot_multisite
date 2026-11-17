@@ -62,11 +62,11 @@ function CreateDeviceDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSuperadmin && !tenantId) {
-      toast.error("Pilih tenant terlebih dahulu");
+      toast.error("Pilih tenant aktif pada header terlebih dahulu");
       return;
     }
     if (!siteId) {
-      toast.error("Pilih site terlebih dahulu");
+      toast.error("Pilih tenant terlebih dahulu");
       return;
     }
     setSubmitting(true);
@@ -95,14 +95,14 @@ function CreateDeviceDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Buat Device Baru</DialogTitle>
-          <DialogDescription>device_key unik di dalam tenant yang sedang aktif.</DialogDescription>
+          <DialogDescription>Site Name unik (tanpa spasi) di dalam tenant yang sedang aktif.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Site</Label>
+            <Label>Tenant</Label>
             <Select value={siteId} onValueChange={setSiteId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Pilih site" />
+                <SelectValue placeholder="Pilih tenant" />
               </SelectTrigger>
               <SelectContent>
                 {sites.map((s) => (
@@ -114,19 +114,23 @@ function CreateDeviceDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="device_key">Device Key</Label>
+            <Label htmlFor="device_key">Site Name</Label>
             <Input
               id="device_key"
               value={deviceKey}
               onChange={(e) => setDeviceKey(e.target.value)}
-              placeholder="gw-01"
+              placeholder="E0247Salemba"
               required
               pattern="^[a-zA-Z0-9_-]+$"
+              title="Hanya huruf, angka, tanda hubung (-), atau garis bawah (_) tanpa spasi"
             />
+            <p className="text-[11px] text-neutral-500">
+              Hanya huruf, angka, <code>-</code>, atau <code>_</code> tanpa spasi (dipakai pada MQTT Client ID).
+            </p>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="name">Nama</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Gateway 1" required />
+            <Label htmlFor="name">Description</Label>
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Deskripsi perangkat / site" required />
           </div>
           <DialogFooter>
             <Button type="submit" disabled={submitting}>
@@ -314,10 +318,10 @@ function DevicesPageContent() {
               <Filter className="w-3.5 h-3.5 text-neutral-400" />
               <Select value={selectedSiteFilter} onValueChange={setSelectedSiteFilter}>
                 <SelectTrigger className="w-45 h-9 text-xs">
-                  <SelectValue placeholder="Semua Site" />
+                  <SelectValue placeholder="Semua Tenant" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Semua Site ({devices.length})</SelectItem>
+                  <SelectItem value="ALL">Semua Tenant ({devices.length})</SelectItem>
                   {sites.map((s) => {
                     const count = devices.filter((d) => d.site_id === s.id).length;
                     return (
@@ -347,7 +351,7 @@ function DevicesPageContent() {
             <p className="text-sm text-neutral-500 px-6">Belum ada device. Buat site terlebih dahulu bila belum ada.</p>
           ) : filteredDevices.length === 0 ? (
             <div className="py-8 text-center space-y-2">
-              <p className="text-sm text-neutral-500">Tidak ada perangkat pada site ini.</p>
+              <p className="text-sm text-neutral-500">Tidak ada perangkat pada tenant ini.</p>
               <Button variant="outline" size="sm" onClick={() => setSelectedSiteFilter("ALL")}>
                 Tampilkan Semua Perangkat
               </Button>
@@ -356,9 +360,9 @@ function DevicesPageContent() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Device Key</TableHead>
-                  <TableHead>Nama</TableHead>
-                  <TableHead>Site</TableHead>
+                  <TableHead>Site Name</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Tenant</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
