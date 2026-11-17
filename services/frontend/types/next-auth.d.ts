@@ -11,6 +11,7 @@ declare module "next-auth" {
       image?: string | null
       role: UserRole
       tenantId: string | null
+      siteId: string | null
     }
     accessToken: string
     error?: "RefreshAccessTokenError"
@@ -23,6 +24,7 @@ declare module "next-auth" {
     image?: string | null
     role: UserRole
     tenantId: string | null
+    siteId: string | null
     accessToken: string
     refreshToken: string
     accessTokenExpires: number
@@ -34,6 +36,7 @@ declare module "next-auth/jwt" {
     id: string
     role: UserRole
     tenantId: string | null
+    siteId: string | null
     accessToken: string
     refreshToken: string
     accessTokenExpires: number

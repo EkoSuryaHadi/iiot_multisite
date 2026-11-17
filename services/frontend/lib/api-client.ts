@@ -125,16 +125,32 @@ export const devicesApi = {
     dm.post<Device>(`/devices/${id}/claim`, data),
   update: (id: string, data: { name?: string; is_active?: boolean }) => dm.patch<Device>(`/devices/${id}`, data),
   remove: (id: string) => dm.delete<void>(`/devices/${id}`),
-  provisionCredentials: (id: string) => dm.post<DeviceCredential>(`/devices/${id}/credentials`),
+  provisionCredentials: (id: string, reset = false) =>
+    dm.post<DeviceCredential>(reset ? `/devices/${id}/credentials?reset=true` : `/devices/${id}/credentials`),
 }
 
 // --- Users ---
 export const usersApi = {
   list: () => dm.get<AppUser[]>("/users"),
-  create: (data: { email: string; password: string; role: UserRole; tenant_id?: string }) =>
-    dm.post<AppUser>("/users", data),
-  update: (id: string, data: { password?: string; role?: UserRole; is_active?: boolean }) =>
-    dm.patch<AppUser>(`/users/${id}`, data),
+  create: (data: {
+    username?: string
+    email?: string
+    password: string
+    role: UserRole
+    tenant_id?: string
+    site_id?: string | null
+  }) => dm.post<AppUser>("/users", data),
+  update: (
+    id: string,
+    data: {
+      username?: string | null
+      email?: string | null
+      password?: string
+      role?: UserRole
+      is_active?: boolean
+      site_id?: string | null
+    }
+  ) => dm.patch<AppUser>(`/users/${id}`, data),
   remove: (id: string) => dm.delete<void>(`/users/${id}`),
 }
 
@@ -160,7 +176,7 @@ export const analyticsApi = {
     offset?: number
   }) => an.get<DeviceStatusListResponse>("/devices/status", params),
 
-  getSummaryTenant: (params?: { tenant_slug?: string; start?: string; end?: string }) =>
+  getSummaryTenant: (params?: { tenant_slug?: string; site_slug?: string; start?: string; end?: string }) =>
     an.get<TenantSummary>("/summary/tenant", params),
 
   getSummarySite: (params: { site_slug: string; tenant_slug?: string; start?: string; end?: string }) =>
@@ -177,7 +193,7 @@ export const analyticsApi = {
 export const spsApi = {
   getPerformance: (
     siteSlug: string,
-    params?: { tenant_slug?: string; start?: string; end?: string }
+    params?: { tenant_slug?: string; device_key?: string; start?: string; end?: string }
   ) => an.get<SpsPerformanceResponse>(`/sps/sites/${siteSlug}/performance`, params),
 
   getHealth: (

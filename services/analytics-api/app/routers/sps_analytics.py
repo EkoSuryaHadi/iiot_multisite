@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.clickhouse_client import get_client
 from app.database_pg import get_pg_db
-from app.deps import CurrentUser, get_current_user, resolve_tenant_scope
+from app.deps import CurrentUser, get_current_user, resolve_site_scope, resolve_tenant_scope
 from app.sps_engine import (
     DEFAULT_BASELINE_KWH_DAILY,
     DEFAULT_PV_CAPACITY_KWP,
@@ -711,13 +711,15 @@ def _build_performance_payload(
 def get_site_sps_performance(
     site_slug: str,
     tenant_slug: str | None = Query(default=None, description="Hanya berlaku untuk superadmin"),
+    device_key: str | None = Query(default=None, description="Filter opsional per device_key"),
     start: datetime | None = None,
     end: datetime | None = None,
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_pg_db),
 ) -> dict[str, Any]:
     effective_tenant = resolve_tenant_scope(current_user, tenant_slug)
-    effective_site = _resolve_effective_site_slug(db, effective_tenant, site_slug)
+    scoped_site = resolve_site_scope(current_user, site_slug) or site_slug
+    effective_site = _resolve_effective_site_slug(db, effective_tenant, scoped_site)
 
     now = datetime.now(timezone.utc)
     end_dt = end or (now + timedelta(minutes=1))
@@ -726,6 +728,8 @@ def get_site_sps_performance(
 
     client = get_client()
     online_devices = _fetch_online_devices(client, effective_tenant, effective_site, threshold_seconds=300)
+    if device_key:
+        online_devices = {device_key} if device_key in online_devices else set()
 
     site_cfg = _load_site_sps_config(db, effective_tenant, effective_site)
     latest, averages = _fetch_site_telemetry_snapshot(
@@ -776,7 +780,8 @@ def get_site_sps_health(
     db: Session = Depends(get_pg_db),
 ) -> dict[str, Any]:
     effective_tenant = resolve_tenant_scope(current_user, tenant_slug)
-    effective_site = _resolve_effective_site_slug(db, effective_tenant, site_slug)
+    scoped_site = resolve_site_scope(current_user, site_slug) or site_slug
+    effective_site = _resolve_effective_site_slug(db, effective_tenant, scoped_site)
     now = datetime.now(timezone.utc)
     end_dt = end or (now + timedelta(minutes=1))
     start_dt = start or (now - timedelta(hours=24))
@@ -851,7 +856,8 @@ def get_site_sps_daily(
     db: Session = Depends(get_pg_db),
 ) -> dict[str, Any]:
     effective_tenant = resolve_tenant_scope(current_user, tenant_slug)
-    effective_site = _resolve_effective_site_slug(db, effective_tenant, site_slug)
+    scoped_site = resolve_site_scope(current_user, site_slug) or site_slug
+    effective_site = _resolve_effective_site_slug(db, effective_tenant, scoped_site)
     site_cfg = _load_site_sps_config(db, effective_tenant, effective_site)
 
     today = datetime.now(timezone.utc).date()

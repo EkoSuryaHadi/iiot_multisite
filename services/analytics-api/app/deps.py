@@ -7,9 +7,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.cache import tenant_slug_cache
+from app.cache import site_slug_cache, tenant_slug_cache
 from app.database_pg import get_pg_db
-from app.models_pg import Tenant
+from app.models_pg import Site, Tenant
 from app.security import decode_token
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -23,6 +23,8 @@ class CurrentUser:
     tenant_id: uuid.UUID | None
     tenant_slug: str | None
     role: str
+    site_id: uuid.UUID | None = None
+    site_slug: str | None = None
 
     @property
     def is_superadmin(self) -> bool:
@@ -35,6 +37,14 @@ def _resolve_tenant_slug(db: Session, tenant_id: uuid.UUID) -> str | None:
         return tenant.slug if tenant else None
 
     return tenant_slug_cache.get_or_set(str(tenant_id), _load)
+
+
+def _resolve_site_slug(db: Session, site_id: uuid.UUID) -> str | None:
+    def _load() -> str | None:
+        site = db.scalar(select(Site).where(Site.id == site_id, Site.is_active.is_(True)))
+        return site.slug if site else None
+
+    return site_slug_cache.get_or_set(str(site_id), _load)
 
 
 def get_current_user(
@@ -65,12 +75,25 @@ def get_current_user(
     tenant_id = uuid.UUID(tenant_id_raw) if tenant_id_raw else None
     tenant_slug = _resolve_tenant_slug(db, tenant_id) if tenant_id else None
 
+    site_id_raw = payload.get("site_id")
+    site_id = uuid.UUID(site_id_raw) if site_id_raw else None
+    site_slug = _resolve_site_slug(db, site_id) if site_id else None
+
     role = payload.get("role", "viewer")
     if tenant_id is not None and tenant_slug is None and role != SUPERADMIN_ROLE:
         # Tenant sudah dihapus / nonaktif tapi token lama masih dipakai.
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant tidak aktif")
+    if site_id is not None and site_slug is None and role != SUPERADMIN_ROLE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Site tidak aktif")
 
-    return CurrentUser(id=uuid.UUID(user_id), tenant_id=tenant_id, tenant_slug=tenant_slug, role=role)
+    return CurrentUser(
+        id=uuid.UUID(user_id),
+        tenant_id=tenant_id,
+        tenant_slug=tenant_slug,
+        role=role,
+        site_id=site_id,
+        site_slug=site_slug,
+    )
 
 
 def resolve_tenant_scope(current_user: CurrentUser, requested_tenant_slug: str | None) -> str:
@@ -93,3 +116,17 @@ def resolve_tenant_scope(current_user: CurrentUser, requested_tenant_slug: str |
             detail="User tidak terasosiasi dengan tenant manapun",
         )
     return current_user.tenant_slug
+
+
+def resolve_site_scope(current_user: CurrentUser, requested_site_slug: str | None) -> str | None:
+    """Batasi akses ke child site tertentu bila user memiliki site_id pada tokennya."""
+    if current_user.is_superadmin or current_user.site_slug is None:
+        return requested_site_slug
+    if not requested_site_slug or requested_site_slug == "auto":
+        return current_user.site_slug
+    if requested_site_slug != current_user.site_slug:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akses dibatasi hanya untuk child site Anda",
+        )
+    return current_user.site_slug

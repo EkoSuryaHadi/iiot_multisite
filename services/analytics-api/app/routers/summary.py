@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from app.clickhouse_client import get_client
 from app.config import settings
-from app.deps import CurrentUser, get_current_user, resolve_tenant_scope
+from app.deps import CurrentUser, get_current_user, resolve_site_scope, resolve_tenant_scope
 from app.device_counts import count_online_offline
 from app.rate_limit import limiter
 from app.schemas import MetricSummary, SiteSummary, TenantSummary
@@ -52,16 +52,18 @@ def _default_window(start: datetime | None, end: datetime | None) -> tuple[datet
 def summary_tenant(
     request: Request,
     tenant_slug: str | None = Query(default=None, description="Hanya berlaku untuk superadmin"),
+    site_slug: str | None = Query(default=None, description="Filter opsional per child site"),
     start: datetime | None = None,
     end: datetime | None = None,
     online_threshold_seconds: int = Query(default=DEFAULT_ONLINE_THRESHOLD_SECONDS, gt=0),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> TenantSummary:
     effective_tenant = resolve_tenant_scope(current_user, tenant_slug)
+    effective_site = resolve_site_scope(current_user, site_slug)
     start, end = _default_window(start, end)
 
-    metrics = _query_metrics(effective_tenant, None, start, end)
-    online, offline = count_online_offline(effective_tenant, None, online_threshold_seconds)
+    metrics = _query_metrics(effective_tenant, effective_site, start, end)
+    online, offline = count_online_offline(effective_tenant, effective_site, online_threshold_seconds)
 
     return TenantSummary(
         tenant_slug=effective_tenant,
@@ -84,14 +86,15 @@ def summary_site(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> SiteSummary:
     effective_tenant = resolve_tenant_scope(current_user, tenant_slug)
+    effective_site = resolve_site_scope(current_user, site_slug) or site_slug
     start, end = _default_window(start, end)
 
-    metrics = _query_metrics(effective_tenant, site_slug, start, end)
-    online, offline = count_online_offline(effective_tenant, site_slug, online_threshold_seconds)
+    metrics = _query_metrics(effective_tenant, effective_site, start, end)
+    online, offline = count_online_offline(effective_tenant, effective_site, online_threshold_seconds)
 
     return SiteSummary(
         tenant_slug=effective_tenant,
-        site_slug=site_slug,
+        site_slug=effective_site,
         device_count=online + offline,
         online_count=online,
         offline_count=offline,

@@ -79,13 +79,18 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     # NULL tenant_id hanya diperbolehkan untuk role superadmin (lintas tenant).
     tenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True)
-    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    # NULL site_id = akses ke semua site dalam tenant; terisi = terisolasi hanya ke 1 child site.
+    site_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sites.id", ondelete="SET NULL"), nullable=True)
+    username: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[Role] = mapped_column(Enum(Role, name="user_role"), nullable=False, default=Role.VIEWER)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    password_reset_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 
     tenant: Mapped["Tenant | None"] = relationship(back_populates="users")
+    site: Mapped["Site | None"] = relationship()
 
 
 class Device(Base):
@@ -109,6 +114,10 @@ class Device(Base):
     assets: Mapped[list["DeviceAsset"]] = relationship(
         back_populates="device", cascade="all, delete-orphan"
     )
+
+    @property
+    def has_credential(self) -> bool:
+        return self.credential is not None
 
 
 class DeviceCredential(Base):

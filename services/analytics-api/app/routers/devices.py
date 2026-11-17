@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.config import settings
-from app.deps import CurrentUser, get_current_user, resolve_tenant_scope
+from app.deps import CurrentUser, get_current_user, resolve_site_scope, resolve_tenant_scope
 from app.device_counts import resolve_device_states
 from app.rate_limit import limiter
 from app.schemas import DeviceStatusListResponse, DeviceStatusOut
@@ -23,11 +23,12 @@ def list_device_status(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> DeviceStatusListResponse:
     effective_tenant = resolve_tenant_scope(current_user, tenant_slug)
+    effective_site = resolve_site_scope(current_user, site_slug)
 
     # Penggabungan registry PostgreSQL + last_seen ClickHouse terjadi di sini, jadi
     # pagination dilakukan setelah merge agar device yang belum pernah mengirim
     # telemetry tidak terlewat.
-    states = resolve_device_states(effective_tenant, site_slug, online_threshold_seconds)
+    states = resolve_device_states(effective_tenant, effective_site, online_threshold_seconds)
     window = states[offset : offset + limit + 1]
     has_more = len(window) > limit
 

@@ -17,7 +17,7 @@ import type { DeviceStatusItem } from "@/lib/types";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
-const DeviceStatusCard = () => {
+const DeviceStatusCard = ({ siteSlug }: { siteSlug?: string }) => {
   const { isSuperadmin, selectedTenantSlug } = useTenantContext();
   const { refreshTrigger } = useAutoRefresh();
   const [devices, setDevices] = useState<DeviceStatusItem[]>([]);
@@ -32,7 +32,11 @@ const DeviceStatusCard = () => {
     setLoading(true);
 
     analyticsApi
-      .getDevicesStatus({ tenant_slug: isSuperadmin ? selectedTenantSlug : undefined, limit: 20 })
+      .getDevicesStatus({
+        tenant_slug: isSuperadmin ? selectedTenantSlug : undefined,
+        site_slug: siteSlug && siteSlug !== "auto" ? siteSlug : undefined,
+        limit: 20,
+      })
       .then((res) => active && setDevices(res.devices))
       .catch((error) => {
         if (error instanceof ApiRequestError) toast.error(error.message);
@@ -42,7 +46,7 @@ const DeviceStatusCard = () => {
     return () => {
       active = false;
     };
-  }, [isSuperadmin, selectedTenantSlug, refreshTrigger]);
+  }, [isSuperadmin, selectedTenantSlug, siteSlug, refreshTrigger]);
 
   return (
     <Card className="card border border-neutral-200 dark:border-slate-700 shadow-none">

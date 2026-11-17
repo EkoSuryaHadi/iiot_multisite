@@ -33,6 +33,7 @@ export interface Device {
   name: string
   is_active: boolean
   registration_status?: "active" | "pending"
+  has_credential?: boolean
   created_at: string
 }
 
@@ -45,9 +46,12 @@ export interface DeviceCredential {
 export interface AppUser {
   id: string
   tenant_id: string | null
-  email: string
+  site_id?: string | null
+  username?: string | null
+  email: string | null
   role: UserRole
   is_active: boolean
+  password_reset_requested_at?: string | null
   created_at: string
 }
 

@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import Link from "next/link"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,12 +34,13 @@ export default function PowerFlowCard({
   useEffect(() => {
     if (externalPerformance !== undefined) return
     if (isSuperadmin && !effectiveTenant) {
-      setInternalData(null)
       return
     }
 
     let isMounted = true
-    setLoading(true)
+    Promise.resolve().then(() => {
+      if (isMounted) setLoading(true)
+    })
     spsApi
       .getPerformance(siteSlug, { tenant_slug: effectiveTenant })
       .then((res) => {
@@ -56,12 +58,22 @@ export default function PowerFlowCard({
     }
   }, [externalPerformance, siteSlug, effectiveTenant, isSuperadmin, refreshTrigger])
 
-  const data = externalPerformance ?? internalData
+  const data = externalPerformance ?? (isSuperadmin && !effectiveTenant ? null : internalData)
   const pf = data?.power_flow
   const resolvedSiteSlug = data?.site_slug || (siteSlug === "auto" ? "-" : siteSlug)
   const siteName = data?.site_config?.site_name
   const isOnline = data?.is_online ?? false
-  const sensors = data?.sensor_metrics || []
+  const sensors = useMemo(() => data?.sensor_metrics || [], [data?.sensor_metrics])
+
+  const sensorsByDevice = useMemo(() => {
+    const groups: Record<string, typeof sensors> = {}
+    for (const s of sensors) {
+      const key = s.device_key || "Perangkat Site"
+      if (!groups[key]) groups[key] = []
+      groups[key].push(s)
+    }
+    return Object.entries(groups)
+  }, [sensors])
 
   return (
     <>
@@ -348,14 +360,14 @@ export default function PowerFlowCard({
             </div>
           </div>
 
-          {/* Dynamic Auto-Discovered Sensor Metrics from ClickHouse (Device Online Saja) */}
+          {/* Dynamic Auto-Discovered Sensor Metrics from ClickHouse (Dipisah per Device Online) */}
           {sensors.length > 0 ? (
-            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between mb-2.5">
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
                   <Database className="h-3.5 w-3.5 text-sky-500" />
                   <span>
-                    Metrik & Sensor Terdeteksi Otomatis ({sensors.length} Tag — Perangkat Online)
+                    Metrik &amp; Sensor Terdeteksi ({sensors.length} Tag pada {sensorsByDevice.length} Perangkat Online)
                   </span>
                 </div>
                 {data?.last_seen && (
@@ -364,35 +376,53 @@ export default function PowerFlowCard({
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-                {sensors.map((s) => (
-                  <div
-                    key={s.metric_name}
-                    className="p-2 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/50 text-xs"
-                  >
-                    <div
-                      className="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate"
-                      title={`${s.metric_name} (${s.device_key || "sensor"})`}
+
+              {sensorsByDevice.map(([devKey, devSensors]) => (
+                <div
+                  key={devKey}
+                  className="rounded-lg border border-slate-200/80 dark:border-slate-800 p-3 bg-slate-50/40 dark:bg-slate-900/30 space-y-2.5"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                      <span>Device:</span>
+                      <span className="font-mono text-emerald-700 dark:text-emerald-400">{devKey}</span>
+                      <Badge variant="secondary" className="text-[10px] h-5">
+                        {devSensors.length} Sensor
+                      </Badge>
+                    </div>
+                    <Link
+                      href={`/telemetry?site=${encodeURIComponent(resolvedSiteSlug)}&device=${encodeURIComponent(devKey)}`}
+                      className="text-[11px] text-primary hover:underline font-medium"
                     >
-                      {s.metric_name}
-                    </div>
-                    <div className="font-mono font-bold text-slate-800 dark:text-slate-200 mt-0.5">
-                      {s.latest_value}
-                    </div>
-                    <div className="text-[10px] text-slate-400 flex items-center justify-between mt-0.5">
-                      <span>Avg: {s.avg_value}</span>
-                      {s.device_key && (
-                        <span
-                          className="truncate max-w-16 text-[9px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold"
-                          title={s.device_key}
-                        >
-                          {s.device_key}
-                        </span>
-                      )}
-                    </div>
+                      Buka Grafik Telemetry →
+                    </Link>
                   </div>
-                ))}
-              </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                    {devSensors.map((s) => (
+                      <Link
+                        key={`${devKey}-${s.metric_name}`}
+                        href={`/telemetry?site=${encodeURIComponent(resolvedSiteSlug)}&device=${encodeURIComponent(devKey)}&metric=${encodeURIComponent(s.metric_name)}`}
+                        className="p-2 rounded-lg border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/70 text-xs hover:border-primary/50 transition-colors"
+                      >
+                        <div
+                          className="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate"
+                          title={`${s.metric_name} (${devKey})`}
+                        >
+                          {s.metric_name}
+                        </div>
+                        <div className="font-mono font-bold text-slate-800 dark:text-slate-200 mt-0.5">
+                          {s.latest_value}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          Avg: {s.avg_value}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 text-center py-2 flex items-center justify-center gap-2">

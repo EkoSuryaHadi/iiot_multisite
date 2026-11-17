@@ -16,7 +16,7 @@ import type { MetricSummary } from "@/lib/types";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
-const MetricsSummaryCard = () => {
+const MetricsSummaryCard = ({ siteSlug }: { siteSlug?: string }) => {
   const { isSuperadmin, selectedTenantSlug } = useTenantContext();
   const { refreshTrigger } = useAutoRefresh();
   const [metrics, setMetrics] = useState<MetricSummary[]>([]);
@@ -31,7 +31,10 @@ const MetricsSummaryCard = () => {
     setLoading(true);
 
     analyticsApi
-      .getSummaryTenant({ tenant_slug: isSuperadmin ? selectedTenantSlug : undefined })
+      .getSummaryTenant({
+        tenant_slug: isSuperadmin ? selectedTenantSlug : undefined,
+        site_slug: siteSlug && siteSlug !== "auto" ? siteSlug : undefined,
+      })
       .then((res) => active && setMetrics(res.metrics))
       .catch((error) => {
         if (error instanceof ApiRequestError) toast.error(error.message);
@@ -41,7 +44,7 @@ const MetricsSummaryCard = () => {
     return () => {
       active = false;
     };
-  }, [isSuperadmin, selectedTenantSlug, refreshTrigger]);
+  }, [isSuperadmin, selectedTenantSlug, siteSlug, refreshTrigger]);
 
   return (
     <Card className="card">

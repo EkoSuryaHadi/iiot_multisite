@@ -32,7 +32,7 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        email: { label: "Username atau Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
@@ -53,6 +53,7 @@ export const authOptions: NextAuthOptions = {
             name: email,
             role: claims.role,
             tenantId: claims.tenant_id,
+            siteId: claims.site_id ?? null,
             accessToken: tokens.access_token,
             refreshToken: tokens.refresh_token,
             accessTokenExpires: claims.exp * 1000,
@@ -73,6 +74,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           role: user.role,
           tenantId: user.tenantId,
+          siteId: user.siteId ?? null,
           accessToken: user.accessToken,
           refreshToken: user.refreshToken,
           accessTokenExpires: user.accessTokenExpires,
@@ -91,6 +93,7 @@ export const authOptions: NextAuthOptions = {
       session.user.id = token.id
       session.user.role = token.role
       session.user.tenantId = token.tenantId
+      session.user.siteId = token.siteId ?? null
       session.accessToken = token.accessToken
       session.error = token.error
       return session

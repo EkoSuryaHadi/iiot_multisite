@@ -4,7 +4,6 @@ import DashboardBreadcrumb from "@/components/layout/dashboard-breadcrumb";
 import RoleGate from "@/components/shared/role-gate";
 import TenantSelector from "@/components/shared/tenant-selector";
 import { MqttSetupDialog } from "@/components/devices/mqtt-setup-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -38,7 +37,7 @@ import { useAutoRefresh } from "@/contexts/AutoRefreshContext";
 import { ApiRequestError, devicesApi, sitesApi, analyticsApi } from "@/lib/api-client";
 import type { Device, DeviceCredential, DeviceStatusItem, Site } from "@/lib/types";
 import { formatTimeAgo, StatusPulse } from "@/components/shared/status-pulse";
-import { Copy, Filter, KeyRound, Loader2, Plus, Trash2 } from "lucide-react";
+import { Copy, Filter, KeyRound, Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -62,11 +61,11 @@ function CreateDeviceDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSuperadmin && !tenantId) {
-      toast.error("Pilih tenant aktif pada header terlebih dahulu");
+      toast.error("Pilih Group Utama (Tenant) pada header terlebih dahulu");
       return;
     }
     if (!siteId) {
-      toast.error("Pilih tenant terlebih dahulu");
+      toast.error("Pilih Child Node (Site) terlebih dahulu");
       return;
     }
     setSubmitting(true);
@@ -94,15 +93,15 @@ function CreateDeviceDialog({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Buat Device Baru</DialogTitle>
-          <DialogDescription>Site Name unik (tanpa spasi) di dalam tenant yang sedang aktif.</DialogDescription>
+          <DialogTitle>Buat Device / Sensor Baru</DialogTitle>
+          <DialogDescription>Device Key unik (tanpa spasi) di dalam Group Utama (Tenant) yang aktif.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Tenant</Label>
+            <Label>Child Node (Site)</Label>
             <Select value={siteId} onValueChange={setSiteId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Pilih tenant" />
+                <SelectValue placeholder="Pilih child node (site)" />
               </SelectTrigger>
               <SelectContent>
                 {sites.map((s) => (
@@ -114,7 +113,7 @@ function CreateDeviceDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="device_key">Site Name</Label>
+            <Label htmlFor="device_key">Device Key</Label>
             <Input
               id="device_key"
               value={deviceKey}
@@ -125,12 +124,12 @@ function CreateDeviceDialog({
               title="Hanya huruf, angka, tanda hubung (-), atau garis bawah (_) tanpa spasi"
             />
             <p className="text-[11px] text-neutral-500">
-              Hanya huruf, angka, <code>-</code>, atau <code>_</code> tanpa spasi (dipakai pada MQTT Client ID).
+              Hanya huruf, angka, <code>-</code>, atau <code>_</code> tanpa spasi (dipakai pada topik MQTT &amp; Client ID).
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="name">Description</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Deskripsi perangkat / site" required />
+            <Label htmlFor="name">Nama / Deskripsi</Label>
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Epever Site E0247Salemba" required />
           </div>
           <DialogFooter>
             <Button type="submit" disabled={submitting}>
@@ -211,6 +210,7 @@ function DevicesPageContent() {
   const [loading, setLoading] = useState(true);
   const [credential, setCredential] = useState<DeviceCredential | null>(null);
   const [provisioningId, setProvisioningId] = useState<string | null>(null);
+  const [resetTargetDevice, setResetTargetDevice] = useState<Device | null>(null);
 
   // Sync query param with state if provided
   useEffect(() => {
@@ -289,11 +289,13 @@ function DevicesPageContent() {
     }
   };
 
-  const handleProvision = async (device: Device) => {
+  const handleProvision = async (device: Device, reset = false) => {
     setProvisioningId(device.id);
     try {
-      const result = await devicesApi.provisionCredentials(device.id);
+      const result = await devicesApi.provisionCredentials(device.id, reset);
       setCredential(result);
+      setResetTargetDevice(null);
+      load();
     } catch (error) {
       toast.error(error instanceof ApiRequestError ? error.message : "Gagal provisioning kredensial");
     } finally {
@@ -317,11 +319,11 @@ function DevicesPageContent() {
             <div className="flex items-center gap-1.5">
               <Filter className="w-3.5 h-3.5 text-neutral-400" />
               <Select value={selectedSiteFilter} onValueChange={setSelectedSiteFilter}>
-                <SelectTrigger className="w-45 h-9 text-xs">
-                  <SelectValue placeholder="Semua Tenant" />
+                <SelectTrigger className="w-52 h-9 text-xs">
+                  <SelectValue placeholder="Semua Child Node (Site)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Semua Tenant ({devices.length})</SelectItem>
+                  <SelectItem value="ALL">Semua Child Node ({devices.length})</SelectItem>
                   {sites.map((s) => {
                     const count = devices.filter((d) => d.site_id === s.id).length;
                     return (
@@ -351,7 +353,7 @@ function DevicesPageContent() {
             <p className="text-sm text-neutral-500 px-6">Belum ada device. Buat site terlebih dahulu bila belum ada.</p>
           ) : filteredDevices.length === 0 ? (
             <div className="py-8 text-center space-y-2">
-              <p className="text-sm text-neutral-500">Tidak ada perangkat pada tenant ini.</p>
+              <p className="text-sm text-neutral-500">Tidak ada perangkat pada child node (site) ini.</p>
               <Button variant="outline" size="sm" onClick={() => setSelectedSiteFilter("ALL")}>
                 Tampilkan Semua Perangkat
               </Button>
@@ -360,9 +362,9 @@ function DevicesPageContent() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Site Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Tenant</TableHead>
+                  <TableHead>Device Key</TableHead>
+                  <TableHead>Nama / Deskripsi</TableHead>
+                  <TableHead>Child Node (Site)</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
                 </TableRow>
@@ -404,9 +406,18 @@ function DevicesPageContent() {
                           <Button
                             variant="outline"
                             size="sm"
-                            title="Generate Kunci / Secret MQTT"
-                            disabled={provisioningId === device.id}
-                            onClick={() => handleProvision(device)}
+                            title={
+                              device.has_credential
+                                ? "Kredensial sudah dibuat. Gunakan Reset / Forgot Password jika lupa."
+                                : "Generate Kunci / Secret MQTT"
+                            }
+                            disabled={Boolean(device.has_credential) || provisioningId === device.id}
+                            className={
+                              device.has_credential
+                                ? "bg-neutral-100 text-neutral-400 border-neutral-200 cursor-not-allowed opacity-60 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700"
+                                : undefined
+                            }
+                            onClick={() => handleProvision(device, false)}
                           >
                             {provisioningId === device.id ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -414,6 +425,17 @@ function DevicesPageContent() {
                               <KeyRound className="w-4 h-4" />
                             )}
                           </Button>
+                          {device.has_credential && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              title="Forgot / Reset Password MQTT"
+                              disabled={provisioningId === device.id}
+                              onClick={() => setResetTargetDevice(device)}
+                            >
+                              <RotateCcw className="w-4 h-4 text-amber-600" />
+                            </Button>
+                          )}
                         </RoleGate>
                         <Button variant="outline" size="sm" onClick={() => toggleActive(device)}>
                           {device.is_active ? "Nonaktifkan" : "Aktifkan"}
@@ -434,6 +456,33 @@ function DevicesPageContent() {
       </Card>
 
       <CredentialResultDialog credential={credential} onClose={() => setCredential(null)} />
+
+      <Dialog open={!!resetTargetDevice} onOpenChange={(v) => !v && setResetTargetDevice(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset / Forgot Password MQTT</DialogTitle>
+            <DialogDescription className="text-amber-600 dark:text-amber-400">
+              Peringatan: Password MQTT lama untuk device{" "}
+              <strong>{resetTargetDevice?.device_key}</strong> akan langsung hangus. Perangkat di lapangan tidak akan bisa terkoneksi sebelum password barunya diperbarui.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetTargetDevice(null)}>
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!resetTargetDevice || provisioningId === resetTargetDevice?.id}
+              onClick={() => resetTargetDevice && handleProvision(resetTargetDevice, true)}
+            >
+              {provisioningId === resetTargetDevice?.id ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-1" />
+              ) : null}
+              Ya, Reset Password MQTT
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

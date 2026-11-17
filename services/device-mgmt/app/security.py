@@ -33,11 +33,13 @@ def _create_token(
     role: str,
     token_type: Literal["access", "refresh"],
     expires_delta: timedelta,
+    site_id: uuid.UUID | None = None,
 ) -> str:
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "sub": str(subject),
         "tenant_id": str(tenant_id) if tenant_id else None,
+        "site_id": str(site_id) if site_id else None,
         "role": role,
         "type": token_type,
         "iat": now,
@@ -46,15 +48,25 @@ def _create_token(
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def create_access_token(subject: uuid.UUID, tenant_id: uuid.UUID | None, role: str) -> str:
+def create_access_token(
+    subject: uuid.UUID,
+    tenant_id: uuid.UUID | None,
+    role: str,
+    site_id: uuid.UUID | None = None,
+) -> str:
     return _create_token(
-        subject, tenant_id, role, "access", timedelta(minutes=settings.jwt_access_expire_minutes)
+        subject, tenant_id, role, "access", timedelta(minutes=settings.jwt_access_expire_minutes), site_id=site_id
     )
 
 
-def create_refresh_token(subject: uuid.UUID, tenant_id: uuid.UUID | None, role: str) -> str:
+def create_refresh_token(
+    subject: uuid.UUID,
+    tenant_id: uuid.UUID | None,
+    role: str,
+    site_id: uuid.UUID | None = None,
+) -> str:
     return _create_token(
-        subject, tenant_id, role, "refresh", timedelta(minutes=settings.jwt_refresh_expire_minutes)
+        subject, tenant_id, role, "refresh", timedelta(minutes=settings.jwt_refresh_expire_minutes), site_id=site_id
     )
 
 

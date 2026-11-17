@@ -16,11 +16,9 @@ const emailField = z
   .min(1, "Email is required")
   .email("Invalid email!");
 
-// Login Schema - validasi password di sini HANYA "wajib diisi", bukan kompleksitas,
-// karena aturan panjang/kompleksitas password ditentukan oleh device-mgmt (min 6 karakter)
-// saat user dibuat, bukan saat login.
+// Login Schema - mendukung login menggunakan username atau email
 export const loginSchema = z.object({
-  email: emailField,
+  email: z.string().trim().min(1, "Username atau email wajib diisi"),
   password: z.string({ error: "Password is required" }).min(1, "Password is required"),
 });
 
@@ -36,7 +34,7 @@ export const registerSchema = loginSchema.extend({
 
 // Forgot Password Schema
 export const forgotPasswordSchema = z.object({
-  email: emailField,
+  email: z.string().trim().min(1, "Username atau email wajib diisi"),
 });
 
 // Create Password Schema

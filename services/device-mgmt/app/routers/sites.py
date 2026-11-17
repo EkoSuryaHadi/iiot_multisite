@@ -16,6 +16,8 @@ def _scoped_query(current_user: CurrentUser):
     stmt = select(Site)
     if current_user.role != Role.SUPERADMIN:
         stmt = stmt.where(Site.tenant_id == current_user.tenant_id)
+        if current_user.site_id is not None:
+            stmt = stmt.where(Site.id == current_user.site_id)
     return stmt
 
 

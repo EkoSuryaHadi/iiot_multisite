@@ -1,15 +1,32 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.models import Role, SiteConfigurationType
 
 
 # --- Auth ---
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str | None = None
+    identifier: str | None = None
     password: str
+
+    @model_validator(mode="after")
+    def _validate_identifier(self) -> "LoginRequest":
+        ident = (self.identifier or self.email or "").strip()
+        if not ident:
+            raise ValueError("Username atau email wajib diisi")
+        self.identifier = ident
+        return self
+
+
+class ForgotPasswordRequest(BaseModel):
+    identifier: str = Field(min_length=1, max_length=255)
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
 
 
 class TokenPair(BaseModel):
@@ -92,16 +109,27 @@ class SiteOut(BaseModel):
 
 # --- User ---
 class UserCreate(BaseModel):
-    email: EmailStr
+    username: str | None = Field(default=None, min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
+    email: EmailStr | None = None
     password: str = Field(min_length=6)
     role: Role
     tenant_id: uuid.UUID | None = None  # hanya dipakai superadmin; tenant lain diambil dari JWT
+    site_id: uuid.UUID | None = None  # opsional: batasi user ke 1 child site tertentu
+
+    @model_validator(mode="after")
+    def _require_username_or_email(self) -> "UserCreate":
+        if not self.username and not self.email:
+            raise ValueError("Username atau email wajib diisi")
+        return self
 
 
 class UserUpdate(BaseModel):
+    username: str | None = Field(default=None, min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
+    email: EmailStr | None = None
     password: str | None = Field(default=None, min_length=6)
     role: Role | None = None
     is_active: bool | None = None
+    site_id: uuid.UUID | None = None
 
 
 class UserOut(BaseModel):
@@ -109,9 +137,12 @@ class UserOut(BaseModel):
 
     id: uuid.UUID
     tenant_id: uuid.UUID | None
-    email: str
+    site_id: uuid.UUID | None = None
+    username: str | None = None
+    email: str | None = None
     role: Role
     is_active: bool
+    password_reset_requested_at: datetime | None = None
     created_at: datetime
 
 
@@ -174,6 +205,7 @@ class DeviceOut(BaseModel):
     name: str
     is_active: bool
     registration_status: str = "active"
+    has_credential: bool = False
     created_at: datetime
     assets: list[DeviceAssetOut] = []
 

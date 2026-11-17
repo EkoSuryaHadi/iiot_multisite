@@ -466,6 +466,102 @@ function TelemetryPageContent() {
         </Card>
       )}
 
+      {/* Hierarki Group Utama (Tenant) -> Child Node (Site) -> Device/Sensor */}
+      {sites.length > 0 && (
+        <Card className="mb-5 bg-white dark:bg-[#273142] border border-neutral-200 dark:border-slate-800 shadow-xs rounded-xl">
+          <CardHeader className="pb-2 pt-4 px-4 sm:px-5 flex flex-row items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Layers className="w-4 h-4 text-emerald-500" />
+                <span>
+                  Overview Group Utama {selectedTenant ? `(${selectedTenant.name})` : ""} → Child Node (Site)
+                </span>
+              </CardTitle>
+              <p className="text-[11px] text-neutral-500 mt-0.5">
+                Klik perangkat di bawah untuk memvisualisasikan grafik telemetry langsung via web.
+              </p>
+            </div>
+            <Badge variant="outline" className="text-[11px]">
+              {sites.length} Child Node · {devices.length} Device
+            </Badge>
+          </CardHeader>
+          <CardContent className="px-4 sm:px-5 pb-4 pt-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {sites.map((site) => {
+                const siteDevs = devices.filter((d) => d.site_id === site.id);
+                const isSiteActive = selectedSiteId === site.id;
+                return (
+                  <div
+                    key={site.id}
+                    className={`rounded-lg border p-3 transition-colors ${
+                      isSiteActive
+                        ? "border-primary/60 bg-primary/5 dark:bg-primary/10"
+                        : "border-neutral-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSiteId(site.id);
+                          if (siteDevs.length > 0) setDeviceId(siteDevs[0].id);
+                        }}
+                        className="text-left font-semibold text-xs text-neutral-800 dark:text-neutral-100 hover:text-primary"
+                      >
+                        {site.name}{" "}
+                        <span className="font-mono text-[10px] text-neutral-500">({site.slug})</span>
+                      </button>
+                      <Badge variant="secondary" className="text-[10px] h-5">
+                        {siteDevs.length} Device
+                      </Badge>
+                    </div>
+                    {siteDevs.length === 0 ? (
+                      <p className="text-[11px] text-neutral-400 italic">Belum ada device</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {siteDevs.map((dev) => {
+                          const isOnline = deviceStatuses[dev.device_key] === "online";
+                          const isSelected = dev.id === deviceId;
+                          return (
+                            <button
+                              key={dev.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedSiteId(site.id);
+                                setDeviceId(dev.id);
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] transition-colors cursor-pointer ${
+                                isSelected
+                                  ? "border-primary bg-primary text-white font-medium"
+                                  : "border-neutral-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-primary/50"
+                              }`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  isOnline
+                                    ? isSelected
+                                      ? "bg-emerald-300"
+                                      : "bg-emerald-500"
+                                    : "bg-neutral-400"
+                                }`}
+                              />
+                              <span className="truncate max-w-32">{dev.name}</span>
+                              <span className={`font-mono text-[10px] ${isSelected ? "text-white/80" : "text-neutral-400"}`}>
+                                ({dev.device_key})
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Control & Filter Panel (Compact, natural height - no h-full stretching) */}
       <Card className="mb-5 bg-white dark:bg-[#273142] border border-neutral-200 dark:border-slate-800 shadow-xs rounded-xl overflow-hidden">
         <CardContent className="p-4 sm:p-5">
@@ -482,7 +578,7 @@ function TelemetryPageContent() {
               <div className="space-y-1.5 lg:col-span-3">
                 <Label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 flex items-center gap-1">
                   <Filter className="w-3.5 h-3.5 text-neutral-400" />
-                  Site Industri
+                  Child Node (Site)
                 </Label>
                 <Select
                   value={selectedSiteId}
@@ -497,10 +593,10 @@ function TelemetryPageContent() {
                   }}
                 >
                   <SelectTrigger className="w-full text-xs h-9">
-                    <SelectValue placeholder="Pilih Site" />
+                    <SelectValue placeholder="Pilih Child Node (Site)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Semua Site ({devices.length} Perangkat)</SelectItem>
+                    <SelectItem value="all">Semua Child Node ({devices.length} Perangkat)</SelectItem>
                     {sites.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {s.name} ({devices.filter((d) => d.site_id === s.id).length} dev)
@@ -513,7 +609,7 @@ function TelemetryPageContent() {
               {/* Device Selector */}
               <div className="space-y-1.5 lg:col-span-4">
                 <Label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 flex items-center justify-between">
-                  <span>Perangkat IoT</span>
+                  <span>Device / Sensor</span>
                   {selectedDevice && (
                     <span className="text-[11px] font-mono text-neutral-400 truncate max-w-36" title={selectedDevice.device_key}>
                       key: {selectedDevice.device_key}

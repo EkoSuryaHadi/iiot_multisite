@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.clickhouse_client import get_client
 from app.config import settings
-from app.deps import CurrentUser, get_current_user, resolve_tenant_scope
+from app.deps import CurrentUser, get_current_user, resolve_site_scope, resolve_tenant_scope
 from app.rate_limit import limiter
 from app.schemas import TelemetryPoint, TelemetryResponse
 
@@ -24,14 +24,15 @@ def list_telemetry_metrics(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> list[str]:
     effective_tenant = resolve_tenant_scope(current_user, tenant_slug)
+    effective_site = resolve_site_scope(current_user, site_slug)
     client = get_client()
 
     clauses = ["tenant_slug = {tenant_slug:String}"]
     params: dict[str, Any] = {"tenant_slug": effective_tenant}
 
-    if site_slug:
+    if effective_site:
         clauses.append("site_slug = {site_slug:String}")
-        params["site_slug"] = site_slug
+        params["site_slug"] = effective_site
 
     if device_key:
         clauses.append("device_key = {device_key:String}")
@@ -71,6 +72,7 @@ def get_telemetry(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="`end` harus lebih besar dari `start`")
 
     effective_tenant = resolve_tenant_scope(current_user, tenant_slug)
+    effective_site = resolve_site_scope(current_user, site_slug)
     client = get_client()
 
     params = {
@@ -83,8 +85,8 @@ def get_telemetry(
         "offset": offset,
     }
     site_filter = ""
-    if site_slug:
-        params["site_slug"] = site_slug
+    if effective_site:
+        params["site_slug"] = effective_site
         site_filter = "AND site_slug = {site_slug:String}"
 
     if interval == "raw":
@@ -130,7 +132,7 @@ def get_telemetry(
 
     return TelemetryResponse(
         tenant_slug=effective_tenant,
-        site_slug=site_slug,
+        site_slug=effective_site,
         device_key=device_key,
         metric_name=metric_name,
         interval=interval,

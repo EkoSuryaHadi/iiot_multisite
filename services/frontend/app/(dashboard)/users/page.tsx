@@ -33,8 +33,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useTenantContext } from "@/contexts/TenantContext";
-import { ApiRequestError, usersApi } from "@/lib/api-client";
-import type { AppUser, UserRole } from "@/lib/types";
+import { ApiRequestError, sitesApi, usersApi } from "@/lib/api-client";
+import type { AppUser, Site, UserRole } from "@/lib/types";
 import { KeyRound, Loader2, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -50,6 +50,7 @@ function ChangePasswordDialog({ user, onUpdated }: { user: AppUser; onUpdated: (
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const accountLabel = user.username || user.email || user.id;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +61,7 @@ function ChangePasswordDialog({ user, onUpdated }: { user: AppUser; onUpdated: (
     setSubmitting(true);
     try {
       await usersApi.update(user.id, { password });
-      toast.success(`Password untuk ${user.email} berhasil diubah`);
+      toast.success(`Password untuk ${accountLabel} berhasil direset`);
       setOpen(false);
       setPassword("");
       onUpdated();
@@ -74,15 +75,19 @@ function ChangePasswordDialog({ user, onUpdated }: { user: AppUser; onUpdated: (
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" title="Ubah Password">
-          <KeyRound className="w-4 h-4 mr-1" /> Password
+        <Button
+          variant={user.password_reset_requested_at ? "default" : "outline"}
+          size="sm"
+          title="Reset / Forgot Password User"
+        >
+          <KeyRound className="w-4 h-4 mr-1" /> Reset Password
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Ubah Password User</DialogTitle>
+          <DialogTitle>Reset / Ubah Password User</DialogTitle>
           <DialogDescription>
-            Masukkan password baru untuk <strong>{user.email}</strong>.
+            Masukkan password baru untuk <strong>{accountLabel}</strong>.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -109,28 +114,53 @@ function ChangePasswordDialog({ user, onUpdated }: { user: AppUser; onUpdated: (
   );
 }
 
-function CreateUserDialog({ tenantId, onCreated }: { tenantId?: string; onCreated: () => void }) {
+function CreateUserDialog({
+  tenantId,
+  sites,
+  onCreated,
+}: {
+  tenantId?: string;
+  sites: Site[];
+  onCreated: () => void;
+}) {
   const [open, setOpen] = useState(false);
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("viewer");
+  const [siteScope, setSiteScope] = useState<string>("ALL");
   const [submitting, setSubmitting] = useState(false);
   const { isSuperadmin } = useTenantContext();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSuperadmin && role !== "superadmin" && !tenantId) {
-      toast.error("Pilih tenant terlebih dahulu");
+      toast.error("Pilih Group Utama (Tenant) terlebih dahulu");
+      return;
+    }
+    const cleanUsername = username.trim();
+    const cleanEmail = email.trim();
+    if (!cleanUsername && !cleanEmail) {
+      toast.error("Isi minimal Username atau Email");
       return;
     }
     setSubmitting(true);
     try {
-      await usersApi.create({ email, password, role, tenant_id: role === "superadmin" ? undefined : tenantId });
+      await usersApi.create({
+        username: cleanUsername || undefined,
+        email: cleanEmail || undefined,
+        password,
+        role,
+        tenant_id: role === "superadmin" ? undefined : tenantId,
+        site_id: role === "superadmin" || siteScope === "ALL" ? null : siteScope,
+      });
       toast.success("User berhasil dibuat");
       setOpen(false);
+      setUsername("");
       setEmail("");
       setPassword("");
       setRole("viewer");
+      setSiteScope("ALL");
       onCreated();
     } catch (error) {
       toast.error(error instanceof ApiRequestError ? error.message : "Gagal membuat user");
@@ -149,9 +179,23 @@ function CreateUserDialog({ tenantId, onCreated }: { tenantId?: string; onCreate
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Buat User Baru</DialogTitle>
-          <DialogDescription>Password minimal 6 karakter.</DialogDescription>
+          <DialogDescription>
+            Isi Username dan/atau Email (password minimal 6 karakter). Bisa dibatasi ke 1 Child Node (Site) tertentu.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="deden_datasystem (opsional jika Email diisi)"
+              pattern="^[a-zA-Z0-9._-]+$"
+              minLength={3}
+            />
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -159,8 +203,7 @@ function CreateUserDialog({ tenantId, onCreated }: { tenantId?: string; onCreate
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="user@example.com"
-              required
+              placeholder="user@example.com (opsional jika Username diisi)"
             />
           </div>
           <div className="space-y-1.5">
@@ -189,6 +232,24 @@ function CreateUserDialog({ tenantId, onCreated }: { tenantId?: string; onCreate
               </SelectContent>
             </Select>
           </div>
+          {role !== "superadmin" && (
+            <div className="space-y-1.5">
+              <Label>Akses Child Node (Site)</Label>
+              <Select value={siteScope} onValueChange={setSiteScope}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Semua Child Node di Group Utama (Tenant)</SelectItem>
+                  {sites.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name} ({s.slug})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={submitting}>
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Simpan"}
@@ -203,13 +264,15 @@ function CreateUserDialog({ tenantId, onCreated }: { tenantId?: string; onCreate
 function UsersPageContent() {
   const { isSuperadmin, selectedTenant } = useTenantContext();
   const [users, setUsers] = useState<AppUser[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const all = await usersApi.list();
+      const [all, allSites] = await Promise.all([usersApi.list(), sitesApi.list()]);
       setUsers(isSuperadmin && selectedTenant ? all.filter((u) => u.tenant_id === selectedTenant.id) : all);
+      setSites(isSuperadmin && selectedTenant ? allSites.filter((s) => s.tenant_id === selectedTenant.id) : allSites);
     } catch (error) {
       toast.error(error instanceof ApiRequestError ? error.message : "Gagal memuat user");
     } finally {
@@ -231,8 +294,19 @@ function UsersPageContent() {
     }
   };
 
+  const handleSiteScopeChange = async (user: AppUser, nextScope: string) => {
+    try {
+      await usersApi.update(user.id, { site_id: nextScope === "ALL" ? null : nextScope });
+      toast.success("Scope Child Node (Site) user diperbarui");
+      load();
+    } catch (error) {
+      toast.error(error instanceof ApiRequestError ? error.message : "Gagal mengubah scope site");
+    }
+  };
+
   const handleDelete = async (user: AppUser) => {
-    if (!confirm(`Hapus user "${user.email}"?`)) return;
+    const label = user.username || user.email || user.id;
+    if (!confirm(`Hapus user "${label}"?`)) return;
     try {
       await usersApi.remove(user.id);
       toast.success("User dihapus");
@@ -248,7 +322,7 @@ function UsersPageContent() {
         <DashboardBreadcrumb title="USERS" text="Users" />
         <div className="flex items-center gap-3">
           <TenantSelector />
-          <CreateUserDialog tenantId={selectedTenant?.id} onCreated={load} />
+          <CreateUserDialog tenantId={selectedTenant?.id} sites={sites} onCreated={load} />
         </div>
       </div>
 
@@ -259,15 +333,16 @@ function UsersPageContent() {
           ) : users.length === 0 ? (
             <p className="text-sm text-neutral-500 px-6">
               {isSuperadmin && selectedTenant
-                ? `Belum ada user di tenant ${selectedTenant.name}.`
+                ? `Belum ada user di Group Utama ${selectedTenant.name}.`
                 : "Belum ada user."}
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Username / Email</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Scope Child Node (Site)</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Dibuat</TableHead>
                   <TableHead className="text-right">Aksi</TableHead>
@@ -276,8 +351,44 @@ function UsersPageContent() {
               <TableBody>
                 {users.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.email}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex flex-col gap-1">
+                        <span>{user.username || user.email}</span>
+                        {user.username && user.email && (
+                          <span className="text-xs text-neutral-500">{user.email}</span>
+                        )}
+                        {user.password_reset_requested_at && (
+                          <Badge className="w-fit bg-amber-500 text-white text-[10px]">
+                            Minta Reset Password
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>{ROLE_LABEL[user.role]}</TableCell>
+                    <TableCell>
+                      {user.role === "superadmin" ? (
+                        <span className="text-xs text-neutral-500">Lintas Group</span>
+                      ) : (
+                        <Select
+                          value={user.site_id || "ALL"}
+                          onValueChange={(val) => handleSiteScopeChange(user, val)}
+                        >
+                          <SelectTrigger className="w-44 h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ALL">Semua Site di Group</SelectItem>
+                            {sites
+                              .filter((s) => !user.tenant_id || s.tenant_id === user.tenant_id)
+                              .map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name} ({s.slug})
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge className={user.is_active ? "bg-green-600 text-white" : "bg-neutral-400 text-white"}>
                         {user.is_active ? "aktif" : "nonaktif"}

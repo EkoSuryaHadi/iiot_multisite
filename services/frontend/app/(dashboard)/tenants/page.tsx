@@ -58,12 +58,12 @@ function CreateTenantDialog({ onCreated }: { onCreated: () => void }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button className="flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Tenant Baru
+          <Plus className="w-4 h-4" /> Group Utama Baru
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Buat Tenant Baru</DialogTitle>
+          <DialogTitle>Buat Group Utama (Tenant) Baru</DialogTitle>
           <DialogDescription>Slug hanya huruf kecil, angka, dan tanda hubung.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -120,7 +120,7 @@ function TenantsPageContent() {
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-        <DashboardBreadcrumb title="TENANTS" text="Tenants" />
+        <DashboardBreadcrumb title="GROUP UTAMA (TENANT)" text="Group Utama (Tenant)" />
         <CreateTenantDialog onCreated={refreshTenants} />
       </div>
 

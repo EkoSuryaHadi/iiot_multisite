@@ -696,7 +696,7 @@ function SitesPageContent() {
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-        <DashboardBreadcrumb title="SITES" text="Sites" />
+        <DashboardBreadcrumb title="CHILD NODE (SITE)" text="Child Node (Site)" />
         <div className="flex items-center gap-3">
           <TenantSelector />
           <RoleGate allow={["superadmin", "tenant_admin"]}>
@@ -724,7 +724,7 @@ function SitesPageContent() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Slug</TableHead>
-                  <TableHead>Nama Site</TableHead>
+                  <TableHead>Nama Child Node (Site)</TableHead>
                   <TableHead>Konfigurasi SPS</TableHead>
                   <TableHead>Perangkat Terpasang</TableHead>
                   <TableHead>Koordinat</TableHead>

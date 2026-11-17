@@ -17,18 +17,18 @@ export const data = {
       icon: House,
     },
     {
-      title: "Tenants",
+      title: "Group Utama (Tenant)",
       url: "/tenants",
       icon: Building2,
       roles: ["superadmin"] as UserRole[],
     },
     {
-      title: "Sites",
+      title: "Child Node (Site)",
       url: "/sites",
       icon: MapPin,
     },
     {
-      title: "Devices",
+      title: "Devices / Sensor",
       url: "/devices",
       icon: Server,
     },

@@ -21,6 +21,7 @@ class CurrentUser:
     id: uuid.UUID
     tenant_id: uuid.UUID | None
     role: Role
+    site_id: uuid.UUID | None = None
 
 
 def get_current_user(
@@ -51,7 +52,7 @@ def get_current_user(
     if user is None or not user.is_active:
         raise credentials_error
 
-    return CurrentUser(id=user.id, tenant_id=user.tenant_id, role=user.role)
+    return CurrentUser(id=user.id, tenant_id=user.tenant_id, role=user.role, site_id=user.site_id)
 
 
 def require_roles(*roles: Role):

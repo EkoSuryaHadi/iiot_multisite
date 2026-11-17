@@ -5,6 +5,7 @@
 export interface AccessTokenClaims {
   sub: string
   tenant_id: string | null
+  site_id?: string | null
   role: "superadmin" | "tenant_admin" | "operator" | "viewer"
   type: "access" | "refresh"
   iat: number

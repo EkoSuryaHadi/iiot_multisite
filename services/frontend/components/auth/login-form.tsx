@@ -13,7 +13,8 @@ import { Input } from '@/components/ui/input'
 import { useLoading } from '@/contexts/LoadingContext'
 import { loginSchema } from '@/lib/zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Lock, User } from 'lucide-react'
+import Link from 'next/link'
 import { signIn } from 'next-auth/react'
 import { useRef, useState, useTransition } from 'react'
 import { useForm } from 'react-hook-form'
@@ -47,7 +48,7 @@ const LoginForm = () => {
       })
 
       if (result?.error) {
-        toast.error('Email atau password salah')
+        toast.error('Username/email atau password salah')
         setLoading(false)
         setIsSubmitting(false)
       } else if (result?.ok) {
@@ -69,7 +70,7 @@ const LoginForm = () => {
           onSubmit={form.handleSubmit(onSubmit)}
           className="space-y-5"
         >
-          {/* Email Field */}
+          {/* Username / Email Field */}
           <FormField
             control={form.control}
             name="email"
@@ -77,11 +78,11 @@ const LoginForm = () => {
               <FormItem>
                 <FormControl>
                   <div className="relative">
-                    <Mail className="absolute start-5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-700 dark:text-neutral-200" />
+                    <User className="absolute start-5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-700 dark:text-neutral-200" />
                     <Input
                       {...field}
-                      type="email"
-                      placeholder="Email"
+                      type="text"
+                      placeholder="Username atau Email"
                       name="email"
                       className="ps-13 pe-12 h-14 rounded-xl bg-neutral-100 dark:bg-slate-800 border border-neutral-300 dark:border-slate-700 focus:border-primary dark:focus:border-primary focus-visible:border-primary !shadow-none !ring-0"
                       disabled={loading}
@@ -128,7 +129,7 @@ const LoginForm = () => {
             )}
           />
 
-          {/* Remember Me */}
+          {/* Remember Me & Forgot Password */}
           <div className="mt-2 flex justify-between items-center">
             <div className="flex items-center gap-2">
               <Checkbox
@@ -139,6 +140,12 @@ const LoginForm = () => {
                 Remember me
               </label>
             </div>
+            <Link
+              href="/auth/forgot-password"
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Lupa Password?
+            </Link>
           </div>
 
           {/* Submit Button */}

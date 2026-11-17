@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import CurrentUser, require_admin, resolve_tenant_scope
-from app.models import Role, User
+from app.models import Role, Site, User
 from app.schemas import UserCreate, UserOut, UserUpdate
 from app.security import hash_secret
 
@@ -30,13 +30,27 @@ def create_user(
         )
 
     tenant_id = None if payload.role == Role.SUPERADMIN else resolve_tenant_scope(current_user, payload.tenant_id)
+    site_id = None if payload.role == Role.SUPERADMIN else payload.site_id
 
-    exists = db.scalar(select(User).where(User.tenant_id == tenant_id, User.email == payload.email))
-    if exists:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email sudah terdaftar di tenant ini")
+    if site_id is not None:
+        site = db.scalar(select(Site).where(Site.id == site_id, Site.tenant_id == tenant_id))
+        if site is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site tidak ditemukan di tenant ini")
+
+    if payload.username:
+        username_exists = db.scalar(select(User).where(User.username == payload.username))
+        if username_exists:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username sudah dipakai")
+
+    if payload.email:
+        exists = db.scalar(select(User).where(User.tenant_id == tenant_id, User.email == payload.email))
+        if exists:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email sudah terdaftar di tenant ini")
 
     user = User(
         tenant_id=tenant_id,
+        site_id=site_id,
+        username=payload.username,
         email=payload.email,
         hashed_password=hash_secret(payload.password),
         role=payload.role,
@@ -77,8 +91,17 @@ def update_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User tidak ditemukan")
 
     data = payload.model_dump(exclude_unset=True)
-    if "password" in data:
+    if "username" in data and data["username"]:
+        conflict = db.scalar(select(User).where(User.username == data["username"], User.id != user.id))
+        if conflict:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username sudah dipakai")
+    if "site_id" in data and data["site_id"] is not None:
+        site = db.scalar(select(Site).where(Site.id == data["site_id"], Site.tenant_id == user.tenant_id))
+        if site is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site tidak ditemukan di tenant ini")
+    if "password" in data and data["password"] is not None:
         user.hashed_password = hash_secret(data.pop("password"))
+        user.password_reset_requested_at = None
     for field, value in data.items():
         setattr(user, field, value)
 

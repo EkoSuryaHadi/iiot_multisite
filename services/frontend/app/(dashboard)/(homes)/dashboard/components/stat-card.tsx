@@ -17,7 +17,7 @@ interface CardData {
   description: string;
 }
 
-const StatCard = () => {
+const StatCard = ({ siteSlug }: { siteSlug?: string }) => {
   const { isSuperadmin, selectedTenantSlug } = useTenantContext();
   const { refreshTrigger } = useAutoRefresh();
   const [loading, setLoading] = useState(true);
@@ -36,7 +36,10 @@ const StatCard = () => {
     setLoading(true);
 
     analyticsApi
-      .getSummaryTenant({ tenant_slug: isSuperadmin ? selectedTenantSlug : undefined })
+      .getSummaryTenant({
+        tenant_slug: isSuperadmin ? selectedTenantSlug : undefined,
+        site_slug: siteSlug && siteSlug !== "auto" ? siteSlug : undefined,
+      })
       .then((summary) => {
         if (!active) return;
         setDeviceCount(summary.device_count);
@@ -52,7 +55,7 @@ const StatCard = () => {
     return () => {
       active = false;
     };
-  }, [isSuperadmin, selectedTenantSlug, refreshTrigger]);
+  }, [isSuperadmin, selectedTenantSlug, siteSlug, refreshTrigger]);
 
   const cardsDatas: CardData[] = [
     {

@@ -1,8 +1,8 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.deps import CurrentUser, get_current_user, require_admin, require_operator, resolve_tenant_scope
@@ -22,9 +22,11 @@ router = APIRouter(prefix="/devices", tags=["devices"])
 
 
 def _scoped_query(current_user: CurrentUser):
-    stmt = select(Device)
+    stmt = select(Device).options(selectinload(Device.credential))
     if current_user.role != Role.SUPERADMIN:
         stmt = stmt.where(Device.tenant_id == current_user.tenant_id)
+        if current_user.site_id is not None:
+            stmt = stmt.where(Device.site_id == current_user.site_id)
     return stmt
 
 
@@ -33,6 +35,8 @@ def create_device(
     payload: DeviceCreate, db: Session = Depends(get_db), current_user: CurrentUser = Depends(require_operator)
 ) -> Device:
     tenant_id = resolve_tenant_scope(current_user, payload.tenant_id)
+    if current_user.role != Role.SUPERADMIN and current_user.site_id is not None and payload.site_id != current_user.site_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Akses dibatasi ke site Anda saja")
 
     site = db.scalar(select(Site).where(Site.id == payload.site_id, Site.tenant_id == tenant_id))
     if site is None:
@@ -74,6 +78,8 @@ def claim_device(
     current_user: CurrentUser = Depends(require_operator),
 ) -> Device:
     target_tenant_id = resolve_tenant_scope(current_user, payload.tenant_id)
+    if current_user.role != Role.SUPERADMIN and current_user.site_id is not None and payload.site_id != current_user.site_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Akses dibatasi ke site Anda saja")
 
     # Validasi site tujuan
     site = db.scalar(select(Site).where(Site.id == payload.site_id, Site.tenant_id == target_tenant_id))
@@ -140,13 +146,20 @@ def delete_device(
 @router.post("/{device_id}/credentials", response_model=DeviceCredentialOut)
 def provision_credentials(
     device_id: uuid.UUID,
+    reset: bool = Query(default=False, description="Set true untuk mereset/rotasi password MQTT yang sudah ada"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_operator),
 ) -> DeviceCredentialOut:
-    """Generate (atau rotasi) kredensial MQTT device. Password plaintext hanya dikembalikan sekali."""
+    """Generate (atau rotasi eksplisit dengan reset=true) kredensial MQTT device."""
     device = db.scalar(_scoped_query(current_user).where(Device.id == device_id))
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device tidak ditemukan")
+
+    if device.credential is not None and not reset:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Kredensial MQTT sudah dibuat. Gunakan fitur Reset / Forgot Password jika lupa.",
+        )
 
     tenant = device.tenant
     site = device.site

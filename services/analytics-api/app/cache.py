@@ -29,3 +29,4 @@ class LockedTTLCache:
 
 
 tenant_slug_cache = LockedTTLCache(maxsize=10_000, ttl=settings.tenant_cache_ttl_seconds)
+site_slug_cache = LockedTTLCache(maxsize=10_000, ttl=settings.tenant_cache_ttl_seconds)
