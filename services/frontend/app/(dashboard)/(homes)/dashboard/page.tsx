@@ -124,7 +124,7 @@ function DashboardContent() {
           <AutoRefreshSelector />
           {visibleSites.length > 0 && (
             <Select value={effectiveSiteSlug} onValueChange={setSelectedSiteSlug}>
-              <SelectTrigger className="w-[190px] bg-white dark:bg-slate-800 h-9 text-xs">
+              <SelectTrigger className="w-47.5 bg-white dark:bg-slate-800 h-9 text-xs">
                 <MapPin className="w-3.5 h-3.5 mr-1 text-emerald-500 shrink-0" />
                 <SelectValue placeholder="Pilih Child Node (Site)" />
               </SelectTrigger>
@@ -139,7 +139,7 @@ function DashboardContent() {
           )}
           {siteDevices.length > 1 && (
             <Select value={effectiveDeviceKey} onValueChange={setSelectedDeviceKey}>
-              <SelectTrigger className="w-[190px] bg-white dark:bg-slate-800 h-9 text-xs">
+              <SelectTrigger className="w-47.5 bg-white dark:bg-slate-800 h-9 text-xs">
                 <Server className="w-3.5 h-3.5 mr-1 text-sky-500 shrink-0" />
                 <SelectValue placeholder="Semua Device" />
               </SelectTrigger>

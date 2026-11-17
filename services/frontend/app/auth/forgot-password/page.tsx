@@ -55,8 +55,8 @@ export default function ForgotPasswordPage() {
       </div>
 
       <div className="lg:w-1/2 w-full py-8 px-6 flex flex-col justify-center">
-        <div className="lg:max-w-[464px] w-full mx-auto">
-          <div className="mb-2.5 inline-block max-w-[290px]">
+        <div className="lg:max-w-116 w-full mx-auto">
+          <div className="mb-2.5 inline-block max-w-72.5">
             <ThemeLogo />
           </div>
           <h4 className="font-semibold mb-2">Lupa Password</h4>
@@ -77,7 +77,7 @@ export default function ForgotPasswordPage() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="relative">
-                <User className="absolute start-5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-700 dark:text-neutral-200" />
+                <User className="absolute inset-s-5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-700 dark:text-neutral-200" />
                 <Input
                   type="text"
                   value={identifier}
@@ -89,7 +89,7 @@ export default function ForgotPasswordPage() {
                 />
               </div>
 
-              <Button type="submit" className="w-full rounded-lg h-[52px] text-sm" disabled={submitting}>
+              <Button type="submit" className="w-full rounded-lg h-13 text-sm" disabled={submitting}>
                 {submitting ? (
                   <>
                     <Loader2 className="animate-spin h-4.5 w-4.5 mr-2" />

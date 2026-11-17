@@ -22,7 +22,7 @@ export default function TenantSelector() {
       onValueChange={setSelectedTenantId}
       disabled={tenantsLoading || tenants.length === 0}
     >
-      <SelectTrigger className="w-[220px] bg-white dark:bg-slate-800">
+      <SelectTrigger className="w-55 bg-white dark:bg-slate-800">
         <SelectValue placeholder={tenantsLoading ? "Memuat group..." : "Pilih Group Utama (Tenant)"} />
       </SelectTrigger>
       <SelectContent>

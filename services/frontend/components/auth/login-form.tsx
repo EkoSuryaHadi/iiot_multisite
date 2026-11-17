@@ -78,13 +78,13 @@ const LoginForm = () => {
               <FormItem>
                 <FormControl>
                   <div className="relative">
-                    <User className="absolute start-5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-700 dark:text-neutral-200" />
+                    <User className="absolute inset-s-5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-700 dark:text-neutral-200" />
                     <Input
                       {...field}
                       type="text"
                       placeholder="Username atau Email"
                       name="email"
-                      className="ps-13 pe-12 h-14 rounded-xl bg-neutral-100 dark:bg-slate-800 border border-neutral-300 dark:border-slate-700 focus:border-primary dark:focus:border-primary focus-visible:border-primary !shadow-none !ring-0"
+                      className="ps-13 pe-12 h-14 rounded-xl bg-neutral-100 dark:bg-slate-800 border border-neutral-300 dark:border-slate-700 focus:border-primary dark:focus:border-primary focus-visible:border-primary shadow-none! ring-0!"
                       disabled={loading}
                     />
                   </div>
@@ -102,19 +102,19 @@ const LoginForm = () => {
               <FormItem>
                 <FormControl>
                   <div className="relative">
-                    <Lock className="absolute start-5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-700 dark:text-neutral-200" />
+                    <Lock className="absolute inset-s-5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-700 dark:text-neutral-200" />
                     <Input
                       {...field}
                       type={showPassword ? 'text' : 'password'}
                       placeholder="Password"
                       name="password"
-                      className="ps-13 pe-12 h-14 rounded-xl bg-neutral-100 dark:bg-slate-800 border border-neutral-300 dark:border-slate-700 focus:border-primary dark:focus:border-primary focus-visible:border-primary !shadow-none !ring-0"
+                      className="ps-13 pe-12 h-14 rounded-xl bg-neutral-100 dark:bg-slate-800 border border-neutral-300 dark:border-slate-700 focus:border-primary dark:focus:border-primary focus-visible:border-primary shadow-none! ring-0!"
                       disabled={loading}
                     />
                     <Button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 transform -translate-y-1/2 !p-0 bg-transparent hover:bg-transparent text-muted-foreground h-[unset]"
+                      className="absolute right-4 top-1/2 transform -translate-y-1/2 p-0! bg-transparent hover:bg-transparent text-muted-foreground h-[unset]"
                     >
                       {showPassword ? (
                         <EyeOff className="w-5 h-5" />
@@ -151,7 +151,7 @@ const LoginForm = () => {
           {/* Submit Button */}
           <Button
             type="submit"
-            className="w-full rounded-lg h-[52px] text-sm mt-2"
+            className="w-full rounded-lg h-13 text-sm mt-2"
             disabled={loading || isPending}
           >
             {isSubmitting || isPending ? (
